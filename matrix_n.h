@@ -1,14 +1,15 @@
-#ifndef BASICNODE_H
-#define BASICNODE_H
+#ifndef MATRIX_N_H
+#define MATRIX_N_H
 
 #include <maya/MPxNode.h>
 #include <maya/MTypeId.h>
+#include <maya/MMatrix.h>  // Include for matrix handling
 
-class BasicNode : public MPxNode
+class MatrixN : public MPxNode
 {
 public:
-    BasicNode() {}
-    virtual ~BasicNode() {}
+    MatrixN() {}
+    virtual ~MatrixN() {}
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
 
     static void* creator();

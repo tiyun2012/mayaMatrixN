@@ -70,6 +70,7 @@
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.mll</TargetExt>
     <IncludePath>C:\Program Files\Autodesk\Maya2024;C:\Program Files\Autodesk\Maya2024\include;E:\dev\RBF\devkit2024\include;$(IncludePath)</IncludePath>
+    <TargetName>matrix_n</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
@@ -78,6 +79,7 @@
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.mll</TargetExt>
     <IncludePath>C:\Program Files\Autodesk\Maya2024;C:\Program Files\Autodesk\Maya2024\include;E:\dev\RBF\devkit2024\include;$(IncludePath)</IncludePath>
+    <TargetName>matrix_n</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -130,10 +132,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="BasicNode.cpp" />
+    <ClCompile Include="matrix_n.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BasicNode.h" />
+    <ClInclude Include="matrix_n.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
