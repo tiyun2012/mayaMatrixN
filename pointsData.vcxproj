@@ -23,6 +23,7 @@
     <ProjectGuid>{47586DD8-E1B2-4EC9-AE93-513FFD351666}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>pointsRBF</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -70,7 +71,7 @@
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.mll</TargetExt>
     <IncludePath>C:\Program Files\Autodesk\Maya2024;C:\Program Files\Autodesk\Maya2024\include;E:\dev\RBF\devkit2024\include;$(IncludePath)</IncludePath>
-    <TargetName>matrix_n</TargetName>
+    <TargetName>PointsRBF</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
@@ -79,7 +80,7 @@
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.mll</TargetExt>
     <IncludePath>C:\Program Files\Autodesk\Maya2024;C:\Program Files\Autodesk\Maya2024\include;E:\dev\RBF\devkit2024\include;$(IncludePath)</IncludePath>
-    <TargetName>matrix_n</TargetName>
+    <TargetName>PointsRBF</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -132,10 +133,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="matrix_n.cpp" />
+    <ClCompile Include="PointsRBF.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="matrix_n.h" />
+    <ClInclude Include="PointsRBF.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
