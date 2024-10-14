@@ -12,6 +12,8 @@ public:
     virtual ~PointsRBF() {}
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
 
+    void postConstructor() override;  // Declare the postConstructor() method
+
     static void* creator();
     static MStatus initialize();
 
