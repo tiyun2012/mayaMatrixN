@@ -3,6 +3,8 @@
 #include <maya/MArrayDataHandle.h>
 #include <maya/MGlobal.h>
 #include <maya/MFnPlugin.h>
+#include <maya/MFnNumericData.h>  // To handle numeric data
+#include <maya/MArrayDataBuilder.h>  // Include this to use MArrayDataBuilder
 
 // Define the static attributes
 MTypeId PointsRBF::id(0x001226C6);  // Unique node ID
@@ -11,40 +13,7 @@ MObject PointsRBF::inputPointsAttr;
 // Compute method: No specific output, compute is minimal
 MStatus PointsRBF::compute(const MPlug& plug, MDataBlock& dataBlock)
 {
-    // As no computation is required, return success.
     return MStatus::kSuccess;
-}
-
-// postConstructor method to ensure the inputPoints attribute has at least 2 elements
-void PointsRBF::postConstructor()
-{
-    MStatus status;
-
-    MPlug inputPointsPlug(thisMObject(), inputPointsAttr);
-
-    unsigned int numElements = inputPointsPlug.numElements();
-
-    // Ensure there are at least 2 elements
-    if (numElements < 2)
-    {
-        MGlobal::displayWarning("Input points array has less than 2 elements. Adding default points.");
-
-        // Add the first point
-        MPlug elementPlug0 = inputPointsPlug.elementByLogicalIndex(0, &status);
-        if (status == MStatus::kSuccess) {
-            elementPlug0.child(0).setDouble(1.0);  // Set X value
-            elementPlug0.child(1).setDouble(0.0);  // Set Y value
-            elementPlug0.child(2).setDouble(0.0);  // Set Z value
-        }
-
-        // Add the second point
-        MPlug elementPlug1 = inputPointsPlug.elementByLogicalIndex(1, &status);
-        if (status == MStatus::kSuccess) {
-            elementPlug1.child(0).setDouble(0.0);  // Set X value
-            elementPlug1.child(1).setDouble(1.0);  // Set Y value
-            elementPlug1.child(2).setDouble(0.0);  // Set Z value
-        }
-    }
 }
 
 // Creator function
@@ -62,9 +31,37 @@ MStatus PointsRBF::initialize()
     inputPointsAttr = numAttr.createPoint("inputPoints", "inPoints");
     numAttr.setArray(true);  // This is an array of vector3 values
     numAttr.setUsesArrayDataBuilder(true);
+
+    // Set the minimum number of elements to 2
+    numAttr.setMin(2);
+
+    // Add the attribute to the node
     addAttribute(inputPointsAttr);
 
     return MStatus::kSuccess;
+}
+
+// Post-constructor to pre-populate inputPoints array with 2 default values
+void PointsRBF::postConstructor()
+{
+    MStatus status;
+
+    // Access the datablock to set default values for the inputPoints array
+    MObject thisNode = thisMObject();
+    MPlug inputPointsPlug(thisNode, inputPointsAttr);
+
+    if (inputPointsPlug.isArray())
+    {
+        MDataHandle handle;
+        for (unsigned int i = 0; i < 2; ++i)
+        {
+            handle = inputPointsPlug.elementByLogicalIndex(i).asMDataHandle();
+            MFnNumericData fnNumericData;
+            MObject dataObject = fnNumericData.create(MFnNumericData::k3Double);
+            fnNumericData.setData(0.0, 0.0, 0.0);  // Set default vector values
+            handle.setMObject(dataObject);
+        }
+    }
 }
 
 // Plugin registration

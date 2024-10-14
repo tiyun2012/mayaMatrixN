@@ -10,9 +10,11 @@ class PointsRBF : public MPxNode
 public:
     PointsRBF() {}
     virtual ~PointsRBF() {}
+
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
 
-    void postConstructor() override;  // Declare the postConstructor() method
+    // Updated postConstructor to return void
+    virtual void postConstructor() override;
 
     static void* creator();
     static MStatus initialize();
