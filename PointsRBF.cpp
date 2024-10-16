@@ -91,7 +91,6 @@ void LocatorPositionNode::postConstructor() {
         return;
     }
     elementHandle.setMFloatVector(MVector(1.0, 0.0, 0.0));
-    MGlobal::displayInfo("First element set to (1.0, 0.0, 0.0)");
 
     // Set second element to (0.0, 1.0, 0.0)
     elementHandle = builder.addElement(1, &status);
@@ -99,35 +98,12 @@ void LocatorPositionNode::postConstructor() {
         status.perror("Failed to add second element");
         return;
     }
-    elementHandle.setMFloatVector(MVector(1.0, 1.0, 0.0));
-    MGlobal::displayInfo("Second element set to (0.0, 1.0, 0.0)");
-
-    // Set the arrayHandle with the values from the builder
+    elementHandle.setMFloatVector(MVector(1.0, 1.0, 1.0));
+        // Set the arrayHandle with the values from the builder
     arrayHandle.set(builder);
-
-    // Read back the values before marking as clean
-    MGlobal::displayInfo("Reading back values before marking as clean:");
-    for (unsigned int i = 0; i < arrayHandle.elementCount(); ++i) {
-        arrayHandle.jumpToElement(i);
-        MDataHandle handle = arrayHandle.inputValue();
-        MVector vec = handle.asVector();
-        MString msg = "Element " + MString() + i + ": (" + vec.x + ", " + vec.y + ", " + vec.z + ")";
-        MGlobal::displayInfo(msg); // Print the actual values after they are set
-    }
-
-    // Mark the data as clean
+        // Mark the data as clean
     arrayHandle.setAllClean();
-    MGlobal::displayInfo("Data block marked clean");
 
-    // Read back the values again after marking as clean
-    MGlobal::displayInfo("Reading back values after marking as clean:");
-    for (unsigned int i = 0; i < arrayHandle.elementCount(); ++i) {
-        arrayHandle.jumpToElement(i);
-        MDataHandle handle = arrayHandle.inputValue();
-        MVector vec = handle.asVector();
-        MString msg = "Element " + MString() + i + ": (" + vec.x + ", " + vec.y + ", " + vec.z + ")";
-        MGlobal::displayInfo(msg); // Print the actual values after marking clean
-    }
 }
 
 
