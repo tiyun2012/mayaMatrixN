@@ -19,6 +19,8 @@ public:
 
     // Initialize function to define attributes
     static MStatus initialize();
+    // Overriding setDependentsDirty to detect changes
+    virtual MStatus setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) override;
 
     // Compute function to process input and produce output
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
@@ -27,6 +29,7 @@ public:
     static MTypeId id;
     static MObject inputPositions; // Array of locator positions (double3)
     static MObject outputAttribute; // Output attribute for demonstration
+    void rbf();
 };
 
 // Unique ID for the node (replace with your unique ID)
@@ -119,4 +122,21 @@ MStatus uninitializePlugin(MObject obj) {
 
     MGlobal::displayInfo("LocatorPositionNode plugin unloaded.");
     return MS::kSuccess;
+}
+
+// Override setDependentsDirty to detect input changes
+MStatus LocatorPositionNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) {
+    // Check if the inputPositions attribute is changing
+    if (plug == inputPositions) {
+        // Call rbf() when the input changes
+        rbf();
+    }
+
+    // Call the base class implementation
+    return MPxNode::setDependentsDirty(plug, plugArray);
+}
+void LocatorPositionNode::rbf()
+{
+    MGlobal::displayInfo(MString(" calling rbf"));
+
 }
