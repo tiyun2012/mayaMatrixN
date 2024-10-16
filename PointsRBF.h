@@ -1,28 +1,41 @@
-#ifndef POINTS_RBF_H
-#define POINTS_RBF_H
+
+#ifndef RBF_POINTS_H
+#define RBF_POINTS_H
 
 #include <maya/MPxNode.h>
-#include <maya/MTypeId.h>
-#include <maya/MVectorArray.h>  // For handling vector arrays
+#include <maya/MFnNumericAttribute.h>
+#include <maya/MArrayDataHandle.h>
+#include <maya/MGlobal.h>
+#include <maya/MVector.h>
 
-class PointsRBF : public MPxNode
-{
+// Node Class Definition
+class RBFPoints : public MPxNode {
 public:
-    PointsRBF() {}
-    virtual ~PointsRBF() {}
+    RBFPoints() {}
+    virtual ~RBFPoints() override {}
 
-    virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
-
-    // Updated postConstructor to return void
-    virtual void postConstructor() override;
-
+    // Creator function to create an instance of the node
     static void* creator();
+
+    // Initialize function to define attributes
     static MStatus initialize();
 
-    static MTypeId id;
+    // Set default values in postConstructor
+    virtual void postConstructor() override;
 
-    // Input attribute
-    static MObject inputPointsAttr;
+    // Overriding setDependentsDirty to detect changes
+    virtual MStatus setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) override;
+
+    // Compute function to process input and produce output
+    virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
+
+    // Static member variables for input and output attributes
+    static MTypeId id;
+    static MObject inputPositions;  // Array of locator positions (double3)
+    static MObject outputAttribute; // Output attribute for demonstration
+
+    // Helper function for RBF
+    void rbf();
 };
 
 #endif

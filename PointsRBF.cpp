@@ -1,191 +1,123 @@
-#include <maya/MPxNode.h>
-#include <maya/MFnNumericAttribute.h>
-#include <maya/MArrayDataHandle.h>
-#include <maya/MGlobal.h>
+
+#include "PointsRBF.h"
 #include <maya/MFnPlugin.h>
-#include <maya/MVector.h>
 #include <maya/MArrayDataBuilder.h>
-// Node Class Definition
-class LocatorPositionNode : public MPxNode {
-public:
-    LocatorPositionNode() {}
-    virtual ~LocatorPositionNode() override {}
 
-    // Creator function to create an instance of the node
-    static void* creator() {
-        MGlobal::displayInfo(MString("new node"));
-        return new LocatorPositionNode();
-    }
+MTypeId RBFPoints::id(0x00012345); // Unique ID for the node
+MObject RBFPoints::inputPositions;
+MObject RBFPoints::outputAttribute;
 
-    // Initialize function to define attributes
-    static MStatus initialize();
-    // Set default values in postConstructor
-    virtual void postConstructor() override;
+// Creator function to create an instance of the node
+void* RBFPoints::creator() {
+    MGlobal::displayInfo(MString("new node"));
+    return new RBFPoints();
+}
 
-    // Overriding setDependentsDirty to detect changes
-    virtual MStatus setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) override;
-
-    // Compute function to process input and produce output
-    virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
-
-    // Static member variables for input and output attributes
-    static MTypeId id;
-    static MObject inputPositions; // Array of locator positions (double3)
-    static MObject outputAttribute; // Output attribute for demonstration
-    void rbf();
-};
-
-// Unique ID for the node (replace with your unique ID)
-MTypeId LocatorPositionNode::id(0x00012346);
-
-// Define static member variables (input and output attributes)
-MObject LocatorPositionNode::inputPositions;
-MObject LocatorPositionNode::outputAttribute;
-
-MStatus LocatorPositionNode::initialize() {
+// Initialize function to define attributes
+MStatus RBFPoints::initialize() {
     MFnNumericAttribute nAttr;
 
-    // Define an array of double3 (vector) attributes for input positions
     inputPositions = nAttr.createPoint("inputPositions", "inPos");
-    nAttr.setArray(true); // This makes it an array
-    nAttr.setStorable(true); // Ensure values persist in the scene
+    nAttr.setArray(true);  // This makes it an array
+    nAttr.setStorable(true);  // Ensure values persist in the scene
     nAttr.setWritable(true);
     addAttribute(inputPositions);
 
-    // Define an output attribute for demonstration
     outputAttribute = nAttr.createPoint("output", "out");
     nAttr.setWritable(false);
     nAttr.setStorable(false);
     addAttribute(outputAttribute);
 
-    // Define the relationship between input and output
     attributeAffects(inputPositions, outputAttribute);
 
     return MS::kSuccess;
 }
 
-void LocatorPositionNode::postConstructor() {
+// postConstructor implementation
+void RBFPoints::postConstructor() {
     MStatus status;
 
-    // Force the cache to get a writable data block for this node
     MDataBlock dataBlock = forceCache();
 
-    // Create an MArrayDataHandle for the inputPositions attribute
     MArrayDataHandle arrayHandle = dataBlock.outputArrayValue(inputPositions, &status);
     if (!status) {
         status.perror("Failed to get array handle for inputPositions");
-        return; // Early exit if there's an error
+        return;
     }
 
-    // Create an MArrayDataBuilder to properly initialize the array with two elements
     MArrayDataBuilder builder(inputPositions, 2, &status);
     if (!status) {
         status.perror("Failed to create MArrayDataBuilder");
         return;
     }
 
-    // Set first element to (1.0, 0.0, 0.0)
     MDataHandle elementHandle = builder.addElement(0, &status);
-    if (!status) {
-        status.perror("Failed to add first element");
-        return;
-    }
     elementHandle.setMFloatVector(MVector(1.0, 0.0, 0.0));
-
-    // Set second element to (0.0, 1.0, 0.0)
     elementHandle = builder.addElement(1, &status);
-    if (!status) {
-        status.perror("Failed to add second element");
-        return;
-    }
-    elementHandle.setMFloatVector(MVector(1.0, 1.0, 1.0));
-        // Set the arrayHandle with the values from the builder
-    arrayHandle.set(builder);
-        // Mark the data as clean
-    arrayHandle.setAllClean();
+    elementHandle.setMFloatVector(MVector(0.0, 1.0, 0.0));
 
+    arrayHandle.set(builder);
+    arrayHandle.setAllClean();
 }
 
+// Overriding setDependentsDirty to detect input changes
+MStatus RBFPoints::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) {
+    if (plug == inputPositions) {
+        rbf();
+    }
+    return MS::kSuccess;
+}
 
-
-
-MStatus LocatorPositionNode::compute(const MPlug& plug, MDataBlock& dataBlock) {
-    MGlobal::displayInfo("compute() called");
+// Compute function to process input and produce output
+MStatus RBFPoints::compute(const MPlug& plug, MDataBlock& dataBlock) {
     if (plug == outputAttribute) {
-        // Access input values
         MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
         unsigned int numElements = inputArrayHandle.elementCount();
 
-        MGlobal::displayInfo("Positions gathered from locators:");
         for (unsigned int i = 0; i < numElements; ++i) {
             inputArrayHandle.jumpToElement(i);
             MDataHandle positionHandle = inputArrayHandle.inputValue();
-            MVector position = positionHandle.asVector(); // Get the vector (locator position)
-
-            // Print the position to the Maya output
-            MString positionInfo = "Locator " + MString() + i + ": (" + position.x + ", " + position.y + ", " + position.z + ")";
-            MGlobal::displayInfo(positionInfo);
+            MVector position = positionHandle.asVector();
+            MGlobal::displayInfo("Locator position: (" + MString() + position.x + ", " + position.y + ", " + position.z + ")");
         }
 
-        // Mark the output as clean
         MDataHandle outputHandle = dataBlock.outputValue(outputAttribute);
         outputHandle.setClean();
 
         return MS::kSuccess;
     }
-
     return MS::kUnknownParameter;
+}
+
+// Helper function for RBF
+void RBFPoints::rbf() {
+    MGlobal::displayInfo("Calling rbf");
 }
 
 // Plugin load and unload functions
 MStatus initializePlugin(MObject obj) {
     MFnPlugin plugin(obj, "YourName", "1.0", "Any");
-
-    // Register the node
     MStatus status = plugin.registerNode(
-        "LocatorPositionNode",                // Name of the node
-        LocatorPositionNode::id,              // Unique ID
-        LocatorPositionNode::creator,         // Creator function
-        LocatorPositionNode::initialize       // Initialize function
+        "RBFPoints",
+        RBFPoints::id,
+        RBFPoints::creator,
+        RBFPoints::initialize
     );
-
     if (!status) {
         status.perror("Failed to register node");
         return status;
     }
-
-    MGlobal::displayInfo("LocatorPositionNode plugin loaded.");
+    MGlobal::displayInfo("RBFPoints node registered.");
     return MS::kSuccess;
 }
 
 MStatus uninitializePlugin(MObject obj) {
     MFnPlugin plugin(obj);
-
-    // Deregister the node
-    MStatus status = plugin.deregisterNode(LocatorPositionNode::id);
-
+    MStatus status = plugin.deregisterNode(RBFPoints::id);
     if (!status) {
         status.perror("Failed to deregister node");
         return status;
     }
-
-    MGlobal::displayInfo("LocatorPositionNode plugin unloaded.");
+    MGlobal::displayInfo("RBFPoints node deregistered.");
     return MS::kSuccess;
-}
-
-// Override setDependentsDirty to detect input changes
-MStatus LocatorPositionNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) {
-    MGlobal::displayInfo("setDependentsDirty() called for plug: " + plug.name());
-    // Check if the inputPositions attribute is changing
-    if (plug == inputPositions) {
-        // Call rbf() when the input changes
-        rbf();
-    }
-
-    // Call the base class implementation
-    return MPxNode::setDependentsDirty(plug, plugArray);
-}
-
-void LocatorPositionNode::rbf() {
-    MGlobal::displayInfo(MString("Calling rbf"));
 }
