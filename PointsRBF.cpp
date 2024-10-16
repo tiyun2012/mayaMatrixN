@@ -4,7 +4,7 @@
 #include <maya/MGlobal.h>
 #include <maya/MFnPlugin.h>
 #include <maya/MVector.h>
-
+#include <maya/MArrayDataBuilder.h>
 // Node Class Definition
 class LocatorPositionNode : public MPxNode {
 public:
@@ -19,6 +19,9 @@ public:
 
     // Initialize function to define attributes
     static MStatus initialize();
+    // Set default values in postConstructor
+    virtual void postConstructor() override;
+
     // Overriding setDependentsDirty to detect changes
     virtual MStatus setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) override;
 
@@ -33,7 +36,7 @@ public:
 };
 
 // Unique ID for the node (replace with your unique ID)
-MTypeId LocatorPositionNode::id(0x00012345);
+MTypeId LocatorPositionNode::id(0x00012346);
 
 // Define static member variables (input and output attributes)
 MObject LocatorPositionNode::inputPositions;
@@ -45,7 +48,7 @@ MStatus LocatorPositionNode::initialize() {
     // Define an array of double3 (vector) attributes for input positions
     inputPositions = nAttr.createPoint("inputPositions", "inPos");
     nAttr.setArray(true); // This makes it an array
-    nAttr.setStorable(false);
+    nAttr.setStorable(true); // Ensure values persist in the scene
     nAttr.setWritable(true);
     addAttribute(inputPositions);
 
@@ -61,7 +64,77 @@ MStatus LocatorPositionNode::initialize() {
     return MS::kSuccess;
 }
 
+void LocatorPositionNode::postConstructor() {
+    MStatus status;
+
+    // Force the cache to get a writable data block for this node
+    MDataBlock dataBlock = forceCache();
+
+    // Create an MArrayDataHandle for the inputPositions attribute
+    MArrayDataHandle arrayHandle = dataBlock.outputArrayValue(inputPositions, &status);
+    if (!status) {
+        status.perror("Failed to get array handle for inputPositions");
+        return; // Early exit if there's an error
+    }
+
+    // Create an MArrayDataBuilder to properly initialize the array with two elements
+    MArrayDataBuilder builder(inputPositions, 2, &status);
+    if (!status) {
+        status.perror("Failed to create MArrayDataBuilder");
+        return;
+    }
+
+    // Set first element to (1.0, 0.0, 0.0)
+    MDataHandle elementHandle = builder.addElement(0, &status);
+    if (!status) {
+        status.perror("Failed to add first element");
+        return;
+    }
+    elementHandle.setMFloatVector(MVector(1.0, 0.0, 0.0));
+    MGlobal::displayInfo("First element set to (1.0, 0.0, 0.0)");
+
+    // Set second element to (0.0, 1.0, 0.0)
+    elementHandle = builder.addElement(1, &status);
+    if (!status) {
+        status.perror("Failed to add second element");
+        return;
+    }
+    elementHandle.setMFloatVector(MVector(1.0, 1.0, 0.0));
+    MGlobal::displayInfo("Second element set to (0.0, 1.0, 0.0)");
+
+    // Set the arrayHandle with the values from the builder
+    arrayHandle.set(builder);
+
+    // Read back the values before marking as clean
+    MGlobal::displayInfo("Reading back values before marking as clean:");
+    for (unsigned int i = 0; i < arrayHandle.elementCount(); ++i) {
+        arrayHandle.jumpToElement(i);
+        MDataHandle handle = arrayHandle.inputValue();
+        MVector vec = handle.asVector();
+        MString msg = "Element " + MString() + i + ": (" + vec.x + ", " + vec.y + ", " + vec.z + ")";
+        MGlobal::displayInfo(msg); // Print the actual values after they are set
+    }
+
+    // Mark the data as clean
+    arrayHandle.setAllClean();
+    MGlobal::displayInfo("Data block marked clean");
+
+    // Read back the values again after marking as clean
+    MGlobal::displayInfo("Reading back values after marking as clean:");
+    for (unsigned int i = 0; i < arrayHandle.elementCount(); ++i) {
+        arrayHandle.jumpToElement(i);
+        MDataHandle handle = arrayHandle.inputValue();
+        MVector vec = handle.asVector();
+        MString msg = "Element " + MString() + i + ": (" + vec.x + ", " + vec.y + ", " + vec.z + ")";
+        MGlobal::displayInfo(msg); // Print the actual values after marking clean
+    }
+}
+
+
+
+
 MStatus LocatorPositionNode::compute(const MPlug& plug, MDataBlock& dataBlock) {
+    MGlobal::displayInfo("compute() called");
     if (plug == outputAttribute) {
         // Access input values
         MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
@@ -126,6 +199,7 @@ MStatus uninitializePlugin(MObject obj) {
 
 // Override setDependentsDirty to detect input changes
 MStatus LocatorPositionNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) {
+    MGlobal::displayInfo("setDependentsDirty() called for plug: " + plug.name());
     // Check if the inputPositions attribute is changing
     if (plug == inputPositions) {
         // Call rbf() when the input changes
@@ -135,8 +209,7 @@ MStatus LocatorPositionNode::setDependentsDirty(const MPlug& plug, MPlugArray& p
     // Call the base class implementation
     return MPxNode::setDependentsDirty(plug, plugArray);
 }
-void LocatorPositionNode::rbf()
-{
-    MGlobal::displayInfo(MString(" calling rbf"));
 
+void LocatorPositionNode::rbf() {
+    MGlobal::displayInfo(MString("Calling rbf"));
 }
