@@ -1,78 +1,122 @@
-#include "PointsRBF.h"
+#include <maya/MPxNode.h>
 #include <maya/MFnNumericAttribute.h>
 #include <maya/MArrayDataHandle.h>
 #include <maya/MGlobal.h>
 #include <maya/MFnPlugin.h>
-#include <maya/MFnNumericData.h>  // To handle numeric data
-#include <maya/MArrayDataBuilder.h>  // Include this to use MArrayDataBuilder
+#include <maya/MVector.h>
 
-// Define the static attributes
-MTypeId PointsRBF::id(0x001226C6);  // Unique node ID
-MObject PointsRBF::inputPointsAttr;
+// Node Class Definition
+class LocatorPositionNode : public MPxNode {
+public:
+    LocatorPositionNode() {}
+    virtual ~LocatorPositionNode() override {}
 
-// Compute method: No specific output, compute is minimal
-MStatus PointsRBF::compute(const MPlug& plug, MDataBlock& dataBlock)
-{
-    return MStatus::kSuccess;
-}
-
-// Creator function
-void* PointsRBF::creator()
-{
-    return new PointsRBF();
-}
-
-// Initialize the node's attributes
-MStatus PointsRBF::initialize()
-{
-    MFnNumericAttribute numAttr;
-
-    // Input array of vector3 (renamed to inputPoints)
-    inputPointsAttr = numAttr.createPoint("inputPoints", "inPoints");
-    numAttr.setArray(true);  // This is an array of vector3 values
-    numAttr.setUsesArrayDataBuilder(true);
-
-    // Set the minimum number of elements to 2
-    numAttr.setMin(2);
-
-    // Add the attribute to the node
-    addAttribute(inputPointsAttr);
-
-    return MStatus::kSuccess;
-}
-
-// Post-constructor to pre-populate inputPoints array with 2 default values
-void PointsRBF::postConstructor()
-{
-    MStatus status;
-
-    // Access the datablock to set default values for the inputPoints array
-    MObject thisNode = thisMObject();
-    MPlug inputPointsPlug(thisNode, inputPointsAttr);
-
-    if (inputPointsPlug.isArray())
-    {
-        MDataHandle handle;
-        for (unsigned int i = 0; i < 2; ++i)
-        {
-            handle = inputPointsPlug.elementByLogicalIndex(i).asMDataHandle();
-            MFnNumericData fnNumericData;
-            MObject dataObject = fnNumericData.create(MFnNumericData::k3Double);
-            fnNumericData.setData(0.0, 0.0, 0.0);  // Set default vector values
-            handle.setMObject(dataObject);
-        }
+    // Creator function to create an instance of the node
+    static void* creator() {
+        MGlobal::displayInfo(MString("new node"));
+        return new LocatorPositionNode();
     }
+
+    // Initialize function to define attributes
+    static MStatus initialize();
+
+    // Compute function to process input and produce output
+    virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
+
+    // Static member variables for input and output attributes
+    static MTypeId id;
+    static MObject inputPositions; // Array of locator positions (double3)
+    static MObject outputAttribute; // Output attribute for demonstration
+};
+
+// Unique ID for the node (replace with your unique ID)
+MTypeId LocatorPositionNode::id(0x00012345);
+
+// Define static member variables (input and output attributes)
+MObject LocatorPositionNode::inputPositions;
+MObject LocatorPositionNode::outputAttribute;
+
+MStatus LocatorPositionNode::initialize() {
+    MFnNumericAttribute nAttr;
+
+    // Define an array of double3 (vector) attributes for input positions
+    inputPositions = nAttr.createPoint("inputPositions", "inPos");
+    nAttr.setArray(true); // This makes it an array
+    nAttr.setStorable(false);
+    nAttr.setWritable(true);
+    addAttribute(inputPositions);
+
+    // Define an output attribute for demonstration
+    outputAttribute = nAttr.createPoint("output", "out");
+    nAttr.setWritable(false);
+    nAttr.setStorable(false);
+    addAttribute(outputAttribute);
+
+    // Define the relationship between input and output
+    attributeAffects(inputPositions, outputAttribute);
+
+    return MS::kSuccess;
 }
 
-// Plugin registration
-MStatus initializePlugin(MObject obj)
-{
+MStatus LocatorPositionNode::compute(const MPlug& plug, MDataBlock& dataBlock) {
+    if (plug == outputAttribute) {
+        // Access input values
+        MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
+        unsigned int numElements = inputArrayHandle.elementCount();
+
+        MGlobal::displayInfo("Positions gathered from locators:");
+        for (unsigned int i = 0; i < numElements; ++i) {
+            inputArrayHandle.jumpToElement(i);
+            MDataHandle positionHandle = inputArrayHandle.inputValue();
+            MVector position = positionHandle.asVector(); // Get the vector (locator position)
+
+            // Print the position to the Maya output
+            MString positionInfo = "Locator " + MString() + i + ": (" + position.x + ", " + position.y + ", " + position.z + ")";
+            MGlobal::displayInfo(positionInfo);
+        }
+
+        // Mark the output as clean
+        MDataHandle outputHandle = dataBlock.outputValue(outputAttribute);
+        outputHandle.setClean();
+
+        return MS::kSuccess;
+    }
+
+    return MS::kUnknownParameter;
+}
+
+// Plugin load and unload functions
+MStatus initializePlugin(MObject obj) {
     MFnPlugin plugin(obj, "YourName", "1.0", "Any");
-    return plugin.registerNode("PointsRBF", PointsRBF::id, PointsRBF::creator, PointsRBF::initialize);
+
+    // Register the node
+    MStatus status = plugin.registerNode(
+        "LocatorPositionNode",                // Name of the node
+        LocatorPositionNode::id,              // Unique ID
+        LocatorPositionNode::creator,         // Creator function
+        LocatorPositionNode::initialize       // Initialize function
+    );
+
+    if (!status) {
+        status.perror("Failed to register node");
+        return status;
+    }
+
+    MGlobal::displayInfo("LocatorPositionNode plugin loaded.");
+    return MS::kSuccess;
 }
 
-MStatus uninitializePlugin(MObject obj)
-{
+MStatus uninitializePlugin(MObject obj) {
     MFnPlugin plugin(obj);
-    return plugin.deregisterNode(PointsRBF::id);
+
+    // Deregister the node
+    MStatus status = plugin.deregisterNode(LocatorPositionNode::id);
+
+    if (!status) {
+        status.perror("Failed to deregister node");
+        return status;
+    }
+
+    MGlobal::displayInfo("LocatorPositionNode plugin unloaded.");
+    return MS::kSuccess;
 }
