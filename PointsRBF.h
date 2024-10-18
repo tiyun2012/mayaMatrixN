@@ -33,9 +33,11 @@ public:
     static MTypeId id;
     static MObject inputPositions;  // Array of locator positions (double3)
     static MObject outputAttribute; // Output attribute for demonstration
-
+    static MObject restPosition; // New attribute to store the updated positions
     // Helper function for RBF
     void rbf();
+    // New function to set default values for inputPositions and restPosition
+    void defaultInput(MDataBlock& dataBlock);
 };
 
 #endif

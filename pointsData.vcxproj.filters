@@ -15,12 +15,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="MatrixNode.cpp">
+    <ClCompile Include="PointsRBF.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Matrix\BasicMatrix.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MatrixNode.h">
+    <ClInclude Include="PointsRBF.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
