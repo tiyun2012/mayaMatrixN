@@ -137,6 +137,7 @@
     <ClCompile Include="PointsRBF.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Matrix\BasicMatrix.h" />
     <ClInclude Include="PointsRBF.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

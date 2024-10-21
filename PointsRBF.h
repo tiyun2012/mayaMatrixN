@@ -7,7 +7,13 @@
 #include <maya/MArrayDataHandle.h>
 #include <maya/MGlobal.h>
 #include <maya/MVector.h>
-
+#include<maya/MFnTypedAttribute.h>
+#include<BasicMatrix.h>
+#include<string>
+#include<sstream>
+#include<maya/MPlug.h>
+#include<maya/MFnMesh.h>
+#include<maya/MFloatPointArray.h>
 // Node Class Definition
 class RBFPoints : public MPxNode {
 public:
@@ -34,10 +40,28 @@ public:
     static MObject inputPositions;  // Array of locator positions (double3)
     static MObject outputAttribute; // Output attribute for demonstration
     static MObject restPosition; // New attribute to store the updated positions
+    static MObject inputMesh;// mesh to want to use get (x,z)
+    static MObject deformedMesh;
+    //--------------other attributes
+    Eigen::MatrixXd eigenDistanceMatrix;// Cached distance matrix as an Eigen matrix
+    std::vector<double> weights;
+    std::vector<std::pair<double, double>> vertexXZ;  // Vector to store vertex x and z coordinates
+    std::vector<ctsdev::vector3> inPoints;
+    double best_epsilon = 0;
     // Helper function for RBF
     void rbf();
     // New function to set default values for inputPositions and restPosition
     void defaultInput(MDataBlock& dataBlock);
+    // Function to update distance matrix when restPosition changes and store it in Eigen format
+    void updateDistanceMatrix(const std::vector<ctsdev::vector3>& restPositions, Eigen::MatrixXd& eigenDistanceMatrix);
+    static MStatus initAttrs(MFnNumericAttribute& nAttr, MFnTypedAttribute& tAttr);
+    MStatus getVectorValuesFromPlug(const MPlug& plug, std::vector<ctsdev::vector3>& outValues);
+    MStatus updateMeshYValues(const MObject& inMesh, const std::vector<double>& weights, const std::vector<ctsdev::vector3>& controlPoints);
+    MStatus storeVertexXZ(const MObject& inMesh);
+    MStatus storeVertexPositions(const MObject& inMesh);
+    //std::vector<ctsdev::vector3>MayaPointToVector; //cached 
+    static std::vector<ctsdev::vector3> MayaPointToVector(MDataBlock& dataBlock, const MObject& attribute, MStatus& status);
+    static void printMayaPointToVector(const std::vector<ctsdev::vector3>& points);
 };
 
 #endif
