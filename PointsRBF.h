@@ -41,24 +41,30 @@ public:
     static MObject outputAttribute; // Output attribute for demonstration
     static MObject restPosition; // New attribute to store the updated positions
     static MObject inputMesh;// mesh to want to use get (x,z)
+    static MObject outputMesh;
     static MObject deformedMesh;
     //--------------other attributes
     Eigen::MatrixXd eigenDistanceMatrix;// Cached distance matrix as an Eigen matrix
     std::vector<double> weights;
+    MObject inMesh;// cached inputmesh plug
+    MObject indeformedMesh;// cached deformedMesh plug can remove
+    MObject outMeshData;
     std::vector<std::pair<double, double>> vertexXZ;  // Vector to store vertex x and z coordinates
-    std::vector<ctsdev::vector3> inPoints;
+    MFloatPointArray inPoints;//vertex of restmesh
+    MFloatPointArray outPoints;//vertex of restmesh
+    std::vector<ctsdev::vector3> inputPositionsToStd;
     double best_epsilon = 0;
     // Helper function for RBF
-    void rbf();
+    void rbf(MDataBlock& dataBlock, MStatus& status);
     // New function to set default values for inputPositions and restPosition
     void defaultInput(MDataBlock& dataBlock);
     // Function to update distance matrix when restPosition changes and store it in Eigen format
     void updateDistanceMatrix(const std::vector<ctsdev::vector3>& restPositions, Eigen::MatrixXd& eigenDistanceMatrix);
     static MStatus initAttrs(MFnNumericAttribute& nAttr, MFnTypedAttribute& tAttr);
     MStatus getVectorValuesFromPlug(const MPlug& plug, std::vector<ctsdev::vector3>& outValues);
-    MStatus updateMeshYValues(const MObject& inMesh, const std::vector<double>& weights, const std::vector<ctsdev::vector3>& controlPoints);
+    MStatus updateMeshYValues(const MObject& inMesh, MFloatPointArray& inPoints, const std::vector<double>& weights, const std::vector<ctsdev::vector3>& controlPoints);
     MStatus storeVertexXZ(const MObject& inMesh);
-    MStatus storeVertexPositions(const MObject& inMesh);
+    MStatus storeVertexPositions(const MObject& inMesh, MFloatPointArray &inPoints);
     //std::vector<ctsdev::vector3>MayaPointToVector; //cached 
     static std::vector<ctsdev::vector3> MayaPointToVector(MDataBlock& dataBlock, const MObject& attribute, MStatus& status);
     static void printMayaPointToVector(const std::vector<ctsdev::vector3>& points);
