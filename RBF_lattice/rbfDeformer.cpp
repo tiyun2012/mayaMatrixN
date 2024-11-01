@@ -11,13 +11,14 @@
 #include <maya/MFnPlugin.h>
 #include <maya/MFnTypedAttribute.h>
 #include <maya/MFnData.h> 
-
+#include<maya/MFnMatrixArrayData.h>
+#include<maya/MFnMatrixAttribute.h>
 class RBFDeformerNode : public MPxDeformerNode {
 public:
     static MTypeId id;
     static MObject aEpsilon;
     static MObject aControlMesh;
-
+    static MObject aControlMeshTransform;
     Eigen::MatrixXd OriginVertices;
     Eigen::MatrixXd restControlPoints;
     Eigen::MatrixXd deformedControlPoints;
@@ -44,20 +45,22 @@ public:
     MStatus deform(MDataBlock& dataBlock, MItGeometry& iter,
         const MMatrix& localToWorldMatrix, unsigned int geomIndex) override;
 private:
-    bool controlMeshChanged = false;
-    bool controlMeshSourceChanged = false;
-    bool innitilized = false;
+    //bool controlMeshChanged = false;
+    //bool controlMeshSourceChanged = false;
+    bool hasControlMesh;
+    bool enableRecalcualte = true;
     MPointArray inputPoints;
 };
 
 MTypeId RBFDeformerNode::id(0x00002);
 MObject RBFDeformerNode::aEpsilon;
 MObject RBFDeformerNode::aControlMesh;
-
+MObject RBFDeformerNode::aControlMeshTransform;
 MStatus RBFDeformerNode::initialize()
 {
     MFnTypedAttribute tAttr;
     MFnNumericAttribute nAttr;
+    MFnMatrixAttribute mAttr;
     MStatus status;  // Declare status here
 
     // Control Mesh attribute
@@ -78,10 +81,16 @@ MStatus RBFDeformerNode::initialize()
     nAttr.setKeyable(true);
     nAttr.setCached(false);
     addAttribute(aEpsilon);
-
+    // add matrix attribute
+    aControlMeshTransform = mAttr.create("inMeshMatrix","iMMatrix", MFnMatrixAttribute::kDouble,&status);
+    mAttr.setConnectable(true);
+    mAttr.setStorable(true);
+    addAttribute(aControlMeshTransform);
     // Attribute affects
+
     attributeAffects(aControlMesh, outputGeom);
     attributeAffects(aEpsilon, outputGeom);
+    attributeAffects(aControlMeshTransform,outputGeom);
 
     return MS::kSuccess;
 }
@@ -141,18 +150,15 @@ MStatus RBFDeformerNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugA
 {
     if (plug == aControlMesh)
     {
-        controlMeshChanged = true;
-        MGlobal::displayInfo(MString("changeControlMesh from setDirtty"));
+
         if (plug.isConnected())
         {
-            controlMeshSourceChanged = true;
-            MGlobal::displayInfo(MString("is connected"));
+            hasControlMesh = true;
         }
         else
         {
-            innitilized = true;
-            MGlobal::displayInfo(MString("not is connected"));
-            controlMeshSourceChanged = false;
+            hasControlMesh = false;
+            enableRecalcualte = true;
         }
     }
     return MStatus();
@@ -166,10 +172,15 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
 
     double epsilon = dataBlock.inputValue(aEpsilon, &status).asDouble();
     MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
-    MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
-    
-    // check RestMesh isExists
-    if (/*!controlMeshObj.isNull()&& */controlMeshSourceChanged && !innitilized)
+    //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
+    //bool hasControlMesh = !aControlMesh.isNull();
+    if (hasControlMesh==false) {
+        MGlobal::displayWarning("control mesh is not connected");
+        MGlobal::displayWarning(MString("should recalculate weights :")+(enableRecalcualte) );
+        return status;
+    }
+    //enableRecalcualte
+    if ((hasControlMesh == true) && enableRecalcualte/*&& controlMeshSourceChanged && !innitilized*/)
     {
         iter.allPositions(inputPoints);
         Eigen::MatrixXd vertices(inputPoints.length(), 3);
@@ -179,17 +190,19 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
             MGlobal::displayInfo(MString() + inputPoints[i].x + " " + inputPoints[i].y + " " + inputPoints[i].z);
         }
         MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
-    
+
         //
       /*  computeInitialWeightsAndOffsets(vertices, restControlPoints, weightsMatrixOrig, offsets);
         updateWeightsAndOffsets()*/
-        innitilized = true;// set false to make sure this scope not update 
-    }   
-
+        enableRecalcualte = false;
+        MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
+    }
+    MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
+    MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
     //set changed to default
-    controlMeshChanged = false;
-    
-    MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
+    //controlMeshChanged = false;
+
+    //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
     //if (controlMeshObj.isNull()) {
     //    MGlobal::displayWarning("Control mesh is null.");
     //    return MS::kSuccess;
