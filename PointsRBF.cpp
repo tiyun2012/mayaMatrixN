@@ -75,14 +75,13 @@ MStatus RBFPoints::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) 
     if (plug == inputPositions||plug.isChild()) {
         MGlobal::displayInfo("Input positions have changed");
 
-        //MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
-   /*     inputArrayHandle.setAllClean();
-        dataBlock.setClean(plug);*/
+        /*MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
+        inputArrayHandle.setAllClean();*/
+        //dataBlock.setClean(plug);
     }
     else if(plug==restPosition){
         MGlobal::displayInfo(MString(" restposition  changed"));
   
-        
 
 
     }
@@ -90,28 +89,28 @@ MStatus RBFPoints::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) 
     {
         MGlobal::displayInfo("inputMesh changed.");
 
-        //MStatus status;
+        MStatus status;
 
-        //// Get the source plug for inputMesh
-        //MPlug inputMeshPlug = plug.source(&status);
-        //if (status != MS::kSuccess || !inputMeshPlug.isConnected()) {
-        //    MGlobal::displayError("Failed to find the source plug for inputMesh.");
-        //    return MS::kFailure;
-        //}
+        ////// Get the source plug for inputMesh
+        MPlug inputMeshPlug = plug.source(&status);
+        if (status != MS::kSuccess || !inputMeshPlug.isConnected()) {
+            MGlobal::displayError("Failed to find the source plug for inputMesh.");
+            return MS::kFailure;
+        }
 
-        //// Get the MObject of the connected mesh
-        //inMesh = inputMeshPlug.asMObject();
-        //if (inMesh.isNull()) {
-        //    MGlobal::displayError("Failed to retrieve MObject from the source plug.");
-        //    return MS::kFailure;
-        //}
+        ////// Get the MObject of the connected mesh
+        inMesh = inputMeshPlug.asMObject();
+        if (inMesh.isNull()) {
+            MGlobal::displayError("Failed to retrieve MObject from the source plug.");
+            return MS::kFailure;
+        }
 
-        //// Call the function to store vertex x and z coordinates
-        //status = storeVertexPositions(inMesh,inPoints);
-        //if (status != MS::kSuccess) {
-        //    MGlobal::displayError("Failed to store vertex x and z coordinates.");
-        //    return MS::kSuccess;
-        //}
+        ////// Call the function to store vertex x and z coordinates
+        status = storeVertexPositions(inMesh,inPoints);
+        if (status != MS::kSuccess) {
+            MGlobal::displayError("Failed to store vertex x and z coordinates.");
+            return MS::kSuccess;
+        }
         
     }
     
@@ -120,81 +119,61 @@ MStatus RBFPoints::setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) 
     return MS::kSuccess;
 }
 
-// Compute function to process input and produce output
-//MStatus RBFPoints::compute(const MPlug& plug, MDataBlock& dataBlock) 
-//{
-//    if (plug == outputAttribute) {
-//        
-//        
-//        MArrayDataHandle inputArrayHandle = dataBlock.inputArrayValue(inputPositions);
-//        unsigned int numElements = inputArrayHandle.elementCount();
-//        MVector position;
-//        for (unsigned int i = 0; i < numElements; ++i) {
-//            inputArrayHandle.jumpToElement(i);
-//            MDataHandle positionHandle = inputArrayHandle.inputValue();
-//            position = positionHandle.asVector();
-//            MGlobal::displayInfo("Locator position: (" + MString() + position.x + ", " + position.y + ", " + position.z + ")");
-//        }
-//
-//        MDataHandle outputHandle = dataBlock.outputValue(outputAttribute);
-//        //outputHandle.set3Float(position.x,position.y,1.0);
-//        outputHandle.setClean();
-//        //inputArrayHandle.setAllClean();
-//        //dataBlock.setClean(plug);
-//
-//        return MS::kSuccess;
-//    }
-//    else if (plug==outputMesh)
-//    {
-//        std::ostringstream oss;
-//        MGlobal::displayInfo("Calling rbf");
-//        
-//        MStatus status;
-//        inputPositionsToStd = MayaPointToVector(dataBlock, inputPositions, status);
-//
-//        MDataHandle inPutData = dataBlock.inputValue(inputMesh);
-//        MObject inputMeshObj = inPutData.asMesh();
-//        MFnMesh fnMeshOrig(inputMeshObj, &status);
-//        if(status!=MS::kSuccess)
-//        {
-//            MGlobal::displayError("Create MFn for InputMesh failed");
-//            return status;
-//        }
-//        fnMeshOrig.getPoints(inPoints, MSpace::kWorld);
-//
-//        outPoints = inPoints;
-//        MFnMeshData dataCreator;
-//        outMeshData = dataCreator.create();// create data to set to out mesh
-//        MFnMesh fnMeshOutMesh(outMeshData, &status);
-//        if (status != MS::kSuccess)
-//        {
-//            MGlobal::displayError("Create MFn for outMeshData failed");
-//            return status;
-//        }
-//
-//        fnMeshOutMesh.setPoints(outPoints,MSpace::kWorld);
-//   
-//        MDataHandle outputMeshHhandle = dataBlock.outputValue(outputMesh);
-//        outputMeshHhandle.set(outMeshData);
-//        dataBlock.setClean(plug);
-//
-//        
-//    }
-//    return MS::kUnknownParameter;
-//}
+
+MFloatPointArray previousInPoints;
+
 MStatus RBFPoints::compute(const MPlug& plug, MDataBlock& dataBlock)
 {
     MStatus status;
 
     // Check if we are computing the output mesh
-    if (plug == outputMesh)
+    if (plug == outputMesh||plug==inputPositions)
     {
-        // Get the input mesh
-        MObject inputMeshObj = dataBlock.inputValue(inputMesh, &status).asMesh();
+        
+        
+        // calculate weight
+        std::vector < ctsdev::vector3 > restPoints = MayaPointToVector(dataBlock, restPosition, status);
+
+        RBFPoints::eigenDistanceMatrix.resize(restPoints.size(), restPoints.size());
+        //printMayaPointToVector(restPoints);
+        updateDistanceMatrix(restPoints, eigenDistanceMatrix);
+        Eigen::VectorXd TargetVector(restPoints.size());
+        for (size_t i = 0; i < restPoints.size(); ++i) 
+        {
+            TargetVector[i] = restPoints[i].y;
+        }
+        try 
+        {
+            MGlobal::displayInfo(MString(" calculate Weights"));
+            ctsdev::LUsolveWithRegularization(eigenDistanceMatrix, TargetVector, weights, best_epsilon);
+            for (size_t i = 0; i < weights.size(); ++i) {
+
+                // Format the output as a string
+                std::ostringstream oss;
+                oss << "weight: " << i << ":" << weights[i];
+
+                // Print the formatted string to Maya's script editor
+                MGlobal::displayInfo(oss.str().c_str());
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << e.what() << std::endl;
+        }
+        // calculate interpolate
+        // Get the input mesh handle
+        MDataHandle inputMeshHandle = dataBlock.inputValue(inputMesh, &status);
         if (status != MS::kSuccess)
         {
-            MGlobal::displayError("Failed to get input mesh");
+            MGlobal::displayError("Failed to get input mesh handle");
             return status;
+        }
+
+        // Get the input mesh object
+        MObject inputMeshObj = inputMeshHandle.asMesh();
+        if (inputMeshObj.isNull())
+        {
+            MGlobal::displayError("Input mesh is null.");
+            return MS::kFailure;
         }
 
         // Create a function set for the input mesh
@@ -204,20 +183,38 @@ MStatus RBFPoints::compute(const MPlug& plug, MDataBlock& dataBlock)
             MGlobal::displayError("Create MFn for InputMesh failed");
             return status;
         }
-
+        
         // Get the points from the input mesh
-        MFloatPointArray inPoints;
-        fnMeshOrig.getPoints(inPoints, MSpace::kWorld);
+      /*  MFloatPointArray inPoints;
+        fnMeshOrig.getPoints(inPoints, MSpace::kWorld);*/// calculate before
+ 
+        // Compare the current points with the previous points to avoid unnecessary recomputation
+        //if (previousInPoints.length() == inPoints.length()) {
+        //    bool pointsAreSame = true;
+        //    for (unsigned int i = 0; i < inPoints.length(); ++i) {
+        //        if (inPoints[i].distanceTo(previousInPoints[i]) > 0.0001) {  // Small tolerance for floating-point precision
+        //            pointsAreSame = false;
+        //            break;
+        //        }
+        //    }
 
-        // Log input points
-        for (unsigned int i = 0; i < inPoints.length(); ++i)
-        {
-            MGlobal::displayInfo(MString("Input Vertex ") + i + ": " + inPoints[i].x + ", " + inPoints[i].y + ", " + inPoints[i].z);
-        }
+        //    if (pointsAreSame) {
+        //        MGlobal::displayInfo("Input mesh hasn't changed, skipping computation.");
+        //        return MS::kSuccess;
+        //    }
+        //}
+
+        //// Store the current input points for future comparison
+        //previousInPoints = inPoints;
+
+        MGlobal::displayInfo("Input mesh has changed, recomputing output mesh.");
 
         // Copy input points to output points
         MFloatPointArray outPoints = inPoints;
+        for (unsigned i = 0; i < inPoints.length(); ++i)
+        {
 
+        }
         // Create the mesh data using MFnMeshData
         MFnMeshData dataCreator;
         MObject outMeshData = dataCreator.create(&status);
@@ -270,6 +267,8 @@ MStatus RBFPoints::compute(const MPlug& plug, MDataBlock& dataBlock)
 
     return MS::kUnknownParameter;
 }
+
+
 
 
 

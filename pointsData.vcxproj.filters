@@ -23,9 +23,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="PointsRBF.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Matrix\BasicMatrix.h">
       <Filter>Header Files</Filter>
     </ClInclude>
