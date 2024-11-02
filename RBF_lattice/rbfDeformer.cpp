@@ -19,8 +19,7 @@ public:
     static MObject aEpsilon;
     static MObject aControlMesh;
     static MObject aControlMeshTransform;
-    Eigen::MatrixXd OriginVertices;
-    Eigen::MatrixXd restControlPoints;
+    
     Eigen::MatrixXd deformedControlPoints;
     Eigen::MatrixXd weightsMatrixOrig;
     Eigen::MatrixXd weightsMatrixUpdated;
@@ -49,7 +48,10 @@ private:
     //bool controlMeshSourceChanged = false;
     bool hasControlMesh;
     bool enableRecalcualte = true;
-    MPointArray inputPoints;
+    MPointArray mayaRestVertices;//maya
+    Eigen::MatrixXd eigenRestVertices;
+
+   
 };
 
 MTypeId RBFDeformerNode::id(0x00002);
@@ -171,7 +173,7 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     if (envelope == 0.0f) return MS::kSuccess;
 
     double epsilon = dataBlock.inputValue(aEpsilon, &status).asDouble();
-    MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
+    
     //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
     //bool hasControlMesh = !aControlMesh.isNull();
     if (hasControlMesh==false) {
@@ -180,25 +182,46 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         return status;
     }
     //enableRecalcualte
-    if ((hasControlMesh == true) && enableRecalcualte/*&& controlMeshSourceChanged && !innitilized*/)
+    
+    if ((hasControlMesh == true) && enableRecalcualte)
     {
-        iter.allPositions(inputPoints);
-        Eigen::MatrixXd vertices(inputPoints.length(), 3);
-        for (unsigned int i = 0; i < inputPoints.length(); ++i)
-        {
-            vertices.row(i) << inputPoints[i].x, inputPoints[i].y, inputPoints[i].z;
-            MGlobal::displayInfo(MString() + inputPoints[i].x + " " + inputPoints[i].y + " " + inputPoints[i].z);
-        }
         MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
+        // -----------rest mesh---------------------------
+        iter.allPositions(mayaRestVertices);
+        int numberVertices = mayaRestVertices.length();
+        
+        eigenRestVertices.resize(numberVertices,3);
 
-        //
-      /*  computeInitialWeightsAndOffsets(vertices, restControlPoints, weightsMatrixOrig, offsets);
-        updateWeightsAndOffsets()*/
+        for (unsigned int i = 0; i < numberVertices; ++i)
+        {
+            eigenRestVertices.row(i) << mayaRestVertices[i].x, mayaRestVertices[i].y, mayaRestVertices[i].z;
+            MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
+        }
+        
+        // -----------rest points---------------------------
+        MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
+        MFnMesh controlMeshFun(controlMeshObj,&status);
+        // Define an array to store vertex positions
+        MPointArray mayaControlPoints;
+        // Retrieve all vertex positions in world space
+        status = controlMeshFun.getPoints(mayaControlPoints, MSpace::kWorld);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        int numberControlPoints = mayaControlPoints.length();
+        
+        Eigen::MatrixXd EigenControlPoints(numberControlPoints, 3);
+        for (unsigned int i = 0; i < numberControlPoints; ++i)
+        {
+            EigenControlPoints.row(i) << mayaControlPoints[i].x, mayaControlPoints[i].y, mayaControlPoints[i].z;
+            MGlobal::displayInfo(MString("RestPoint: ") + mayaControlPoints[i].x + " " + mayaControlPoints[i].y + " " + mayaControlPoints[i].z);
+        }
+
+        //---------------------update paramter for next calulation---------
         enableRecalcualte = false;
         MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
     }
     MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
     MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
+    MGlobal::displayInfo(MString("number of vertices:") + (mayaRestVertices.length()));
     //set changed to default
     //controlMeshChanged = false;
 
