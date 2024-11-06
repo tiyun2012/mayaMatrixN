@@ -19,7 +19,7 @@ public:
     static MObject aEpsilon;
     static MObject aControlMesh;
     static MObject aControlMeshTransform;
-    
+    static MObject aMaxInfluence;
     
     
     
@@ -41,6 +41,7 @@ public:
     virtual MStatus setDependentsDirty(const MPlug& plug, MPlugArray& plugArray) override;
     MStatus deform(MDataBlock& dataBlock, MItGeometry& iter,
         const MMatrix& localToWorldMatrix, unsigned int geomIndex) override;
+    std::vector<int> getNClosestControlPoints(int vertexIndex, int n, const Eigen::MatrixXd& vertices, const Eigen::MatrixXd& controlPoints);
 private:
     //bool controlMeshChanged = false;
     //bool controlMeshSourceChanged = false;
@@ -57,6 +58,9 @@ private:
     Eigen::MatrixXd deformedControlPoints;
     Eigen::MatrixXd weightsMatrixOrig;
     bool epsilonUpdated = false;
+    bool maxInfluentUpdated = false;
+
+    
    
 };
 
@@ -64,6 +68,7 @@ MTypeId RBFDeformerNode::id(0x00002);
 MObject RBFDeformerNode::aEpsilon;
 MObject RBFDeformerNode::aControlMesh;
 MObject RBFDeformerNode::aControlMeshTransform;
+MObject RBFDeformerNode::aMaxInfluence;
 MStatus RBFDeformerNode::initialize()
 {
     MFnTypedAttribute tAttr;
@@ -99,6 +104,20 @@ MStatus RBFDeformerNode::initialize()
     attributeAffects(aControlMesh, outputGeom);
     attributeAffects(aEpsilon, outputGeom);
     attributeAffects(aControlMeshTransform,outputGeom);
+
+    // Max Influence attribute
+    aMaxInfluence = nAttr.create("maxInfluence", "maxInf", MFnNumericData::kInt, 4, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+    nAttr.setMin(1); // Set minimum value
+    nAttr.setStorable(true);
+    nAttr.setKeyable(true);
+    nAttr.setDefault(4); // Default value
+    nAttr.setReadable(true);
+    nAttr.setWritable(true);
+    addAttribute(aMaxInfluence);
+
+    // Attribute affects
+    attributeAffects(aMaxInfluence, outputGeom);
 
     return MS::kSuccess;
 }
@@ -176,6 +195,10 @@ MStatus RBFDeformerNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugA
     {
         epsilonUpdated = true;
     }
+    if (plug == aMaxInfluence && hasControlMesh)
+    {
+        maxInfluentUpdated = true;
+    }
     return MStatus();
 }
 
@@ -242,6 +265,19 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         updateWeightsAndOffsets(weightsMatrixOrig, epsilon, RestEigenControlPoints, weightsMatrixUpdated, offsets, eigenRestVertices);
         epsilonUpdated = false;
     }
+    if (maxInfluentUpdated == true)
+    {
+        // Retrieve maxInfluence value
+        int maxInfluence = dataBlock.inputValue(aMaxInfluence, &status).asInt();
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        std::vector<int> indexInfluent = getNClosestControlPoints(204,maxInfluence,eigenRestVertices,RestEigenControlPoints);
+        for (unsigned ind : indexInfluent)
+        {
+            MGlobal::displayInfo(MString("indexInfluent: ") + ind);
+        }
+        MGlobal::displayInfo(MString("maxInfluentUpdated: ")+ maxInfluence);
+    }
 
        //
     //deformedControlPoints=
@@ -270,6 +306,53 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     return MS::kSuccess;
 }
 
+std::vector<int> RBFDeformerNode::getNClosestControlPoints(int vertexIndex, int n, const Eigen::MatrixXd& vertices, const Eigen::MatrixXd& controlPoints)
+{
+    // Get the position of the input mesh vertex at index i as a row vector
+    Eigen::RowVector3d vertexPosition = vertices.row(vertexIndex);
+
+    // Number of control points
+    int numControlPoints = controlPoints.rows();
+
+    // Vector to store distances and corresponding control point indices
+    std::vector<std::pair<double, int>> distanceIndexPairs;
+    distanceIndexPairs.reserve(numControlPoints); // Reserve space for efficiency
+
+    // Compute distances from the input vertex to each control point
+    for (int j = 0; j < numControlPoints; ++j) {
+        // Ensure controlPoints.row(j) is also a row vector
+        Eigen::RowVector3d controlPointPosition = controlPoints.row(j);
+
+        // Subtract row vectors and compute the norm
+        double distance = (vertexPosition - controlPointPosition).norm();
+        distanceIndexPairs.emplace_back(distance, j);
+    }
+
+    // Handle the case where n exceeds the number of control points
+    int numInfluences = std::min(n, numControlPoints);
+
+    // Partially sort the vector to get the n closest control points
+    std::nth_element(distanceIndexPairs.begin(), distanceIndexPairs.begin() + numInfluences, distanceIndexPairs.end(),
+        [](const std::pair<double, int>& a, const std::pair<double, int>& b) {
+            return a.first < b.first;
+        });
+
+    // Extract the indices of the n closest control points
+    std::vector<int> closestIndices;
+    closestIndices.reserve(numInfluences);
+    for (int k = 0; k < numInfluences; ++k) {
+        closestIndices.push_back(distanceIndexPairs[k].second);
+    }
+
+    // Optional: Sort the indices based on distance (smallest to largest)
+    std::sort(closestIndices.begin(), closestIndices.end(),
+        [&distanceIndexPairs](int a, int b) {
+            return distanceIndexPairs[a].first < distanceIndexPairs[b].first;
+        });
+
+    return closestIndices;
+}
+
 
 MStatus initializePlugin(MObject obj) {
     MFnPlugin plugin(obj, "YourName", "1.0", "Any");
@@ -281,3 +364,43 @@ MStatus uninitializePlugin(MObject obj) {
     MFnPlugin plugin(obj);
     return plugin.deregisterNode(RBFDeformerNode::id);
 }
+
+//std::vector<int>RBFDeformerNode::getNClosestControlPoints(int vertexIndex, int n,
+//    const Eigen::MatrixXd& vertices, const Eigen::MatrixXd& controlPoints) {
+//
+//    // Get the position of the input mesh vertex at index i
+//    Eigen::Vector3d vertexPosition = vertices.row(vertexIndex);
+//
+//    // Number of control points
+//    int numControlPoints = controlPoints.rows();
+//
+//    // Vector to store distances and corresponding control point indices
+//    std::vector<std::pair<double, int>> distanceIndexPairs;
+//
+//    // Compute distances from the input vertex to each control point
+//    for (int j = 0; j < numControlPoints; ++j) {
+//        double distance = (vertexPosition - controlPoints.row(j)).norm();
+//        distanceIndexPairs.emplace_back(distance, j);
+//    }
+//
+//    // Partially sort the vector to get the n closest control points
+//    std::nth_element(distanceIndexPairs.begin(), distanceIndexPairs.begin() + n, distanceIndexPairs.end(),
+//        [](const std::pair<double, int>& a, const std::pair<double, int>& b) {
+//            return a.first < b.first;
+//        });
+//
+//    // Extract the indices of the n closest control points
+//    std::vector<int> closestIndices;
+//    closestIndices.reserve(n);
+//    for (int k = 0; k < n && k < numControlPoints; ++k) {
+//        closestIndices.push_back(distanceIndexPairs[k].second);
+//    }
+//
+//    // Optional: Sort the indices based on distance (smallest to largest)
+//    std::sort(closestIndices.begin(), closestIndices.end(),
+//        [&distanceIndexPairs](int a, int b) {
+//            return distanceIndexPairs[a].first < distanceIndexPairs[b].first;
+//        });
+//
+//    return closestIndices;
+//}
