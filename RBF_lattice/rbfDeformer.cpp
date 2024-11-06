@@ -20,19 +20,17 @@ public:
     static MObject aControlMesh;
     static MObject aControlMeshTransform;
     
-    Eigen::MatrixXd deformedControlPoints;
-    Eigen::MatrixXd weightsMatrixOrig;
-    Eigen::MatrixXd weightsMatrixUpdated;
-    Eigen::MatrixXd offsets;
+    
+    
+    
     bool isInitialized = false;
 
     static void* creator() { return new RBFDeformerNode(); }
     static MStatus initialize();
 
-    void computeInitialWeightsAndOffsets(const Eigen::MatrixXd& vertices,
+    void computeInitialWeights(const Eigen::MatrixXd& vertices,
         const Eigen::MatrixXd& controlPoints,
-        Eigen::MatrixXd& weightsMatrixOrig,
-        Eigen::MatrixXd& offsets);
+        Eigen::MatrixXd& weightsMatrixOrig);
     void updateWeightsAndOffsets(const Eigen::MatrixXd& weightsMatrixOrig, double epsilon,
         const Eigen::MatrixXd& controlPoints,
         Eigen::MatrixXd& weightsMatrixUpdated, Eigen::MatrixXd& offsets,
@@ -50,7 +48,15 @@ private:
     bool enableRecalcualte = true;
     MPointArray mayaRestVertices;//maya
     Eigen::MatrixXd eigenRestVertices;
-
+    Eigen::MatrixXd offsets;
+    Eigen::MatrixXd weightsMatrix;
+    Eigen::MatrixXd EigenControlPoints;
+    Eigen::MatrixXd RestEigenControlPoints;
+    MPointArray mayaControlPoints;
+    Eigen::MatrixXd weightsMatrixUpdated;
+    Eigen::MatrixXd deformedControlPoints;
+    Eigen::MatrixXd weightsMatrixOrig;
+    bool epsilonUpdated = false;
    
 };
 
@@ -98,15 +104,14 @@ MStatus RBFDeformerNode::initialize()
 }
 
 
-void RBFDeformerNode::computeInitialWeightsAndOffsets(const Eigen::MatrixXd& vertices,
+void RBFDeformerNode::computeInitialWeights(const Eigen::MatrixXd& vertices,
     const Eigen::MatrixXd& controlPoints,
-    Eigen::MatrixXd& weightsMatrixOrig,
-    Eigen::MatrixXd& offsets) {
+    Eigen::MatrixXd& weightsMatrixOrig) {
     Eigen::Index numVertices = vertices.rows();
     Eigen::Index numControlPoints = controlPoints.rows();
 
     weightsMatrixOrig.resize(numVertices, numControlPoints);
-    offsets.resize(numVertices, 3);
+    //offsets.resize(numVertices, 3);
 
     for (Eigen::Index i = 0; i < numVertices; ++i) {
         Eigen::VectorXd distances(numControlPoints);
@@ -117,8 +122,7 @@ void RBFDeformerNode::computeInitialWeightsAndOffsets(const Eigen::MatrixXd& ver
         Eigen::VectorXd weights = distances / sumDistances;
         weightsMatrixOrig.row(i) = weights;
 
-        Eigen::Vector3d originalVertex = weights.transpose() * controlPoints;
-        offsets.row(i) = originalVertex.transpose() - vertices.row(i);
+
     }
 }
 
@@ -134,10 +138,15 @@ void RBFDeformerNode::updateWeightsAndOffsets(const Eigen::MatrixXd& weightsMatr
     for (Eigen::Index i = 0; i < numVertices; ++i) {
         Eigen::VectorXd weights = weightsMatrixOrig.row(i);
         weights = (1.0 - weights.array().pow(0.01)).pow(epsilon);
-        weights /= weights.sum();
+        // Normalize weights
+        double sumWeights = weights.sum();
+        weights /= sumWeights;
+
         weightsMatrixUpdated.row(i) = weights;
 
+        // Recompute offset with new weights
         Eigen::Vector3d originalVertex = weights.transpose() * controlPoints;
+        offsets.resize(numVertices, 3);
         offsets.row(i) = originalVertex.transpose() - vertices.row(i);
     }
 }
@@ -163,6 +172,10 @@ MStatus RBFDeformerNode::setDependentsDirty(const MPlug& plug, MPlugArray& plugA
             enableRecalcualte = true;
         }
     }
+    if (plug == aEpsilon && hasControlMesh)
+    {
+        epsilonUpdated = true;
+    }
     return MStatus();
 }
 
@@ -182,11 +195,27 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         return status;
     }
     //enableRecalcualte
-    
-    if ((hasControlMesh == true) && enableRecalcualte)
+     // -----------controlPoints ---------------------------
+    MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
+    MFnMesh controlMeshFun(controlMeshObj, &status);
+    // Define an array to store vertex positions
+    //MPointArray mayaControlPoints;
+    // Retrieve all vertex positions in world space
+    status = controlMeshFun.getPoints(mayaControlPoints, MSpace::kWorld);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+    int numberControlPoints = mayaControlPoints.length();
+    EigenControlPoints.resize(numberControlPoints, 3);
+    //Eigen::MatrixXd EigenControlPoints(numberControlPoints, 3);
+    for (unsigned int i = 0; i < numberControlPoints; ++i)
+    {
+        EigenControlPoints.row(i) << mayaControlPoints[i].x, mayaControlPoints[i].y, mayaControlPoints[i].z;
+        MGlobal::displayInfo(MString("RestPoint: ") + mayaControlPoints[i].x + " " + mayaControlPoints[i].y + " " + mayaControlPoints[i].z);
+    }
+    if (enableRecalcualte)
     {
         MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
         // -----------rest mesh---------------------------
+        RestEigenControlPoints = EigenControlPoints;
         iter.allPositions(mayaRestVertices);
         int numberVertices = mayaRestVertices.length();
         
@@ -198,93 +227,45 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
             MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
         }
         
-        // -----------rest points---------------------------
-        MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
-        MFnMesh controlMeshFun(controlMeshObj,&status);
-        // Define an array to store vertex positions
-        MPointArray mayaControlPoints;
-        // Retrieve all vertex positions in world space
-        status = controlMeshFun.getPoints(mayaControlPoints, MSpace::kWorld);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-        int numberControlPoints = mayaControlPoints.length();
+       
+        computeInitialWeights(eigenRestVertices, RestEigenControlPoints, weightsMatrixOrig);
+        updateWeightsAndOffsets(weightsMatrixOrig,epsilon, EigenControlPoints,weightsMatrixUpdated,offsets,eigenRestVertices);
         
-        Eigen::MatrixXd EigenControlPoints(numberControlPoints, 3);
-        for (unsigned int i = 0; i < numberControlPoints; ++i)
-        {
-            EigenControlPoints.row(i) << mayaControlPoints[i].x, mayaControlPoints[i].y, mayaControlPoints[i].z;
-            MGlobal::displayInfo(MString("RestPoint: ") + mayaControlPoints[i].x + " " + mayaControlPoints[i].y + " " + mayaControlPoints[i].z);
-        }
-
+        
         //---------------------update paramter for next calulation---------
         enableRecalcualte = false;
         MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
+        MGlobal::displayInfo(MString("number of verticescontrolPoint:") + (numberControlPoints));
     }
-    MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
-    MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
-    MGlobal::displayInfo(MString("number of vertices:") + (mayaRestVertices.length()));
-    //set changed to default
-    //controlMeshChanged = false;
+    if(epsilonUpdated)
+    {
+        updateWeightsAndOffsets(weightsMatrixOrig, epsilon, RestEigenControlPoints, weightsMatrixUpdated, offsets, eigenRestVertices);
+        epsilonUpdated = false;
+    }
 
-    //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
-    //if (controlMeshObj.isNull()) {
-    //    MGlobal::displayWarning("Control mesh is null.");
-    //    return MS::kSuccess;
-    //}
-
-    //if (!isInitialized) {
-    //    MPointArray inputPoints;
-    //    iter.allPositions(inputPoints);
-    //    Eigen::MatrixXd vertices(inputPoints.length(), 3);
-    //    for (unsigned int i = 0; i < inputPoints.length(); ++i) {
-    //        vertices.row(i) << inputPoints[i].x, inputPoints[i].y, inputPoints[i].z;
-    //    }
-
-    //    MFnMesh controlMeshFn(controlMeshObj);
-    //    MPointArray controlPointsArray;
-    //    controlMeshFn.getPoints(controlPointsArray, MSpace::kWorld);
-
-    //    restControlPoints.resize(controlPointsArray.length(), 3);
-    //    deformedControlPoints.resize(controlPointsArray.length(), 3);
-    //    for (unsigned int i = 0; i < controlPointsArray.length(); ++i) {
-    //        restControlPoints.row(i) << controlPointsArray[i].x, controlPointsArray[i].y, controlPointsArray[i].z;
-    //        deformedControlPoints.row(i) = restControlPoints.row(i);
-    //    }
-    //    computeInitialWeightsAndOffsets(vertices, restControlPoints, weightsMatrixOrig, offsets);
-    //    isInitialized = true;
-    //}
-
-    ////// Check if the control mesh has changed
-    ////bool controlMeshChanged = false;
-    ////MFnMesh controlMeshFn(controlMeshObj);
-    ////MPointArray controlPointsArray;
-    ////controlMeshFn.getPoints(controlPointsArray, MSpace::kWorld);
-
-    ////if (controlPointsArray.length() != deformedControlPoints.rows()) {
-    ////    controlMeshChanged = true;
-    ////}
-    ////else {
-    ////    for (unsigned int i = 0; i < controlPointsArray.length(); ++i) {
-    ////        if (controlPointsArray[i].x != deformedControlPoints(i, 0) ||
-    ////            controlPointsArray[i].y != deformedControlPoints(i, 1) ||
-    ////            controlPointsArray[i].z != deformedControlPoints(i, 2)) {
-    ////            controlMeshChanged = true;
-    ////            break;
-    ////        }
-    ////    }
-    ////}
-
-    ////if (controlMeshChanged) {
-    ////    MGlobal::displayInfo("Control mesh updated");
-    ////}
-
-    //// Existing deformation application logic remains unchanged
-    //Eigen::MatrixXd deformation = applyRBFDeformation(weightsMatrixUpdated, offsets, deformedControlPoints);
+       //
+    //deformedControlPoints=
+    Eigen::MatrixXd deformation = applyRBFDeformation(weightsMatrixUpdated, offsets, EigenControlPoints);
     //for (unsigned int i = 0; i < deformation.rows(); ++i) {
     //    MPoint pt(iter.position().x + deformation(i, 0) * envelope,
     //        iter.position().y + deformation(i, 1) * envelope,
     //        iter.position().z + deformation(i, 2) * envelope);
     //    iter.setPosition(pt);
-    //}
+    for (; !iter.isDone(); iter.next())
+    {
+        unsigned ptindex = iter.index();
+        MPoint pt(deformation(ptindex, 0) * envelope, deformation(ptindex, 1) * envelope, deformation(ptindex, 2) * envelope);
+        iter.setPosition(pt);
+    }
+    MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
+    MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
+    MGlobal::displayInfo(MString("number of mayaRestVertices:") + (mayaRestVertices.length()));
+    MGlobal::displayInfo(MString("number of EigenControlPoints:") + EigenControlPoints.rows());
+    MGlobal::displayInfo(MString("number of weightsMatrixOrig:") + weightsMatrixOrig.rows());
+    MGlobal::displayInfo(MString("number  column of weightsMatrixOrig:") + weightsMatrixOrig.cols());
+    MGlobal::displayInfo(MString("number of weightsMatrixUpdated:") + weightsMatrixUpdated.rows());
+    MGlobal::displayInfo(MString("epsilon:") + epsilon);
+    
 
     return MS::kSuccess;
 }
