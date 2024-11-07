@@ -27,8 +27,9 @@ public:
     static MObject aMaxInfluence;
     static MObject aClosestIndices;
     static MObject aWeightBasedClosestIndices;
-    
-    
+    static MObject aCenterOfInfluenceVertex;
+
+
     bool isInitialized = false;
 
     static void* creator() { return new RBFDeformerNode(); }
@@ -67,8 +68,8 @@ private:
     bool epsilonUpdated = false;
     bool maxInfluentUpdated = true;
 
-    
-   
+
+
 };
 
 MTypeId RBFDeformerNode::id(0x00002);
@@ -78,6 +79,7 @@ MObject RBFDeformerNode::aControlMeshTransform;
 MObject RBFDeformerNode::aMaxInfluence;
 MObject RBFDeformerNode::aClosestIndices;
 MObject RBFDeformerNode::aWeightBasedClosestIndices;
+MObject RBFDeformerNode::aCenterOfInfluenceVertex;
 MStatus RBFDeformerNode::initialize()
 {
     MFnTypedAttribute tAttr;
@@ -104,7 +106,7 @@ MStatus RBFDeformerNode::initialize()
     nAttr.setCached(false);
     addAttribute(aEpsilon);
     // add matrix attribute
-    aControlMeshTransform = mAttr.create("inMeshMatrix","iMMatrix", MFnMatrixAttribute::kDouble,&status);
+    aControlMeshTransform = mAttr.create("inMeshMatrix", "iMMatrix", MFnMatrixAttribute::kDouble, &status);
     mAttr.setConnectable(true);
     mAttr.setStorable(true);
     addAttribute(aControlMeshTransform);
@@ -112,7 +114,7 @@ MStatus RBFDeformerNode::initialize()
 
     attributeAffects(aControlMesh, outputGeom);
     attributeAffects(aEpsilon, outputGeom);
-    attributeAffects(aControlMeshTransform,outputGeom);
+    attributeAffects(aControlMeshTransform, outputGeom);
 
     // Max Influence attribute
     aMaxInfluence = nAttr.create("maxInfluence", "maxInf", MFnNumericData::kInt, 4, &status);
@@ -168,6 +170,16 @@ MStatus RBFDeformerNode::initialize()
     // Attribute affects
     attributeAffects(aWeightBasedClosestIndices, outputGeom);
 
+    // Create inputPositions attribute
+    aCenterOfInfluenceVertex = nAttr.createPoint("CenterOfInfluenceVertex", "CInf");
+    //nAttr.setUsesArrayDataBuilder(true);
+    nAttr.setArray(true);  // This makes it an array
+    nAttr.setStorable(true);  // Ensure values persist in the scene
+    nAttr.setWritable(true);
+    nAttr.setCached(true);
+    nAttr.setReadable(true);
+    addAttribute(aCenterOfInfluenceVertex);
+    attributeAffects(aCenterOfInfluenceVertex, outputGeom);
     return MS::kSuccess;
 }
 
@@ -258,14 +270,17 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     if (envelope == 0.0f) return MS::kSuccess;
 
     double epsilon = dataBlock.inputValue(aEpsilon, &status).asDouble();
-    
+
     //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
     //bool hasControlMesh = !aControlMesh.isNull();
-    if (hasControlMesh==false) {
+    if (hasControlMesh == false) {
         //MGlobal::displayWarning("control mesh is not connected");
         //MGlobal::displayWarning(MString("should recalculate weights :")+(enableRecalcualte) );
         return status;
     }
+    unsigned int vertexCount = iter.count();
+    int maxInfluence = dataBlock.inputValue(aMaxInfluence, &status).asInt();
+    double bMaxInfluen = double(maxInfluence);
     //enableRecalcualte
      // -----------controlPoints ---------------------------
     MObject controlMeshObj = dataBlock.inputValue(aControlMesh, &status).asMesh();
@@ -297,54 +312,45 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         for (unsigned int i = 0; i < numberVertices; ++i)
         {
             eigenRestVertices.row(i) << mayaRestVertices[i].x, mayaRestVertices[i].y, mayaRestVertices[i].z;
-            //MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
         }
         enableRecalcualte = false;
     }
-    //    
-    //   
-    //    computeInitialWeights(eigenRestVertices, RestEigenControlPoints, weightsMatrixOrig);
-    //    updateWeightsAndOffsets(weightsMatrixOrig,epsilon, EigenControlPoints,weightsMatrixUpdated,offsets,eigenRestVertices);
-    //    
-    //    
-    //    //---------------------update paramter for next calulation---------
-    //    enableRecalcualte = false;
-    //    MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
-    //    MGlobal::displayInfo(MString("number of verticescontrolPoint:") + (numberControlPoints));
-    //}
- 
-    if(epsilonUpdated)
+
+
+    if (epsilonUpdated)
     {
-        //updateWeightsAndOffsets(weightsMatrixOrig, epsilon, RestEigenControlPoints, weightsMatrixUpdated, offsets, eigenRestVertices);
         epsilonUpdated = false;
     }
     if (maxInfluentUpdated == true)
     {
         //store rest MayaControlPoints
-        
+
         // Retrieve maxInfluence value
-        int maxInfluence = dataBlock.inputValue(aMaxInfluence, &status).asInt();
+        
         int vertexNumber = mayaRestVertices.length();
         CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        
-        
+
+
         // Create an MArrayDataBuilder for the multi-attribute
-        MArrayDataBuilder builder(&dataBlock,aClosestIndices, vertexNumber, &status);
+        MArrayDataBuilder builder(&dataBlock, aClosestIndices, vertexCount, &status);
         CHECK_MSTATUS_AND_RETURN_IT(status);
         // Create an MArrayDataBuilder for the multi-attribute
-        MArrayDataBuilder weightbuilder(&dataBlock, aWeightBasedClosestIndices, vertexNumber, &status);
+        MArrayDataBuilder weightbuilder(&dataBlock, aWeightBasedClosestIndices, vertexCount, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        // Center
+        MArrayDataHandle centerInfVerticesHandle = dataBlock.outputArrayValue(aCenterOfInfluenceVertex, &status);
+        MArrayDataBuilder centerBuilder(&dataBlock,aCenterOfInfluenceVertex, vertexCount, &status);
         CHECK_MSTATUS_AND_RETURN_IT(status);
 
-     
 
         //for (unsigned int i = 0; i < vertexNumber; ++i)
         for (; !iter.isDone(); iter.next())
         {
             unsigned ptindex = iter.index();
             MPoint pt = iter.position();
-            
-        
+
+
             // Get the closest control points for the current vertex
             std::vector<int> indexInfluent = getNClosestControlPoints(ptindex, maxInfluence, eigenRestVertices, RestEigenControlPoints);
 
@@ -367,16 +373,27 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
             double sumdis = 0;
             std::vector<double> dis;
             dis.resize(maxInfluence);
+            MPoint center = MPoint();
             for (size_t idx = 0; idx < maxInfluence; ++idx)
             {
-                
-                intArray.append(indexInfluent[idx]);
-                MPoint rpt = mayaRestControlPoints[idx];
-                double r=sqrt(pow((rpt.x-pt.x),2)+ pow((rpt.y - pt.y), 2)+ pow((rpt.z - pt.z), 2));
-                
+                unsigned int vertexInfindex = indexInfluent[idx];
+                intArray.append(vertexInfindex);
+                MPoint rpt = mayaRestControlPoints[vertexInfindex];
+                center += rpt;
+                double r = sqrt(pow((rpt.x - pt.x), 2) + pow((rpt.y - pt.y), 2) + pow((rpt.z - pt.z), 2));
+
                 sumdis += r;
                 dis[idx] = r;
             }
+            // store center points
+            center.x /= bMaxInfluen;
+            center.y /= bMaxInfluen;
+            center.z /= bMaxInfluen;
+            
+
+            MDataHandle centerElementHandle = centerBuilder.addElement(ptindex, &status);
+            centerElementHandle.setMFloatVector(MVector(center.x,center.y,center.z));
+            
             std::vector<double> weights;
             double sumWeights = 0.0;
             double eps = 1e-8; // Small value to prevent division by zero
@@ -384,10 +401,10 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
 
             for (size_t idx = 0; idx < maxInfluence; ++idx)
             {
-                double weight = 1.0/std::pow(dis[idx]+eps,2);
+                double weight = 1.0 / std::pow(dis[idx] + eps, 2);
                 weights.push_back(weight);
                 sumWeights += weight;
-                
+
             }
             // Normalize weights
             for (double& weight : weights)
@@ -412,7 +429,7 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
             // Optionally, mark the element handle as clean
             hElement.setClean();
             hWeightElement.setClean();
-  
+
 
 
         }
@@ -434,10 +451,11 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         status = hDoubleArray.set(weightbuilder);
         CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        // Mark the array as clean
+                // Mark the array as clean
         hDoubleArray.setAllClean();
-          
-
+        // center clean
+        centerInfVerticesHandle.set(centerBuilder);
+        centerInfVerticesHandle.setAllClean();
 
 
 
@@ -445,7 +463,7 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     }
 
     //   //
-    
+
 
     for (; !iter.isDone(); iter.next())
     {
@@ -464,64 +482,11 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         // Get the number of elements in the array
         unsigned int numControlElements = closestPointConstrolIndicesHandle.elementCount(&status);
         CHECK_MSTATUS_AND_RETURN_IT(status);
-        
-        
-        //// Iterate over each element in the multi-attribute
-        //for (unsigned int i = 0; i < numElements; ++i)
-        //{
-        //    // Jump to the current array element
-        //    status = weightIndicesHandle.jumpToArrayElement(i);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    //Jump to the current closest controlpoint index
-        //    status = closestPointConstrolIndicesHandle.jumpToArrayElement(i);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        //    // Get the data handle for the current element
-        //    MDataHandle elementHandle = weightIndicesHandle.inputValue(&status);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    MDataHandle closestIndicesElement = closestPointConstrolIndicesHandle.inputValue(&status);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    
-        //    // Get the MObject containing the MDoubleArrayData
-        //    MObject doubleArrayDataObj = elementHandle.data();
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    MObject closestArrayIndicesDataObj = closestIndicesElement.data();
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    
-        //    // Create an MFnDoubleArrayData function set to access the data
-        //    MFnDoubleArrayData doubleArrayDataFn(doubleArrayDataObj, &status);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    MFnIntArrayData closestArrayDataFn(closestArrayIndicesDataObj, &status);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    
-        //    // Get the MDoubleArray from the function set
-        //    MDoubleArray doubleArray = doubleArrayDataFn.array(&status);
-        //    CHECK_MSTATUS_AND_RETURN_IT(status);
-        //    MIntArray indiceArray = closestArrayDataFn.array(&status);
-        //    // Now you have the double array for the current element
-        //    // You can process it as needed
-        //    //MGlobal::displayInfo(MString("Element ") + i + ":");
-        //    if (doubleArray.length() != indiceArray.length())
-        //    {
-        //        status = MS::kFailure;
-        //        MGlobal::displayError(MString(" length of weight and index is not fit"));
-        //        return status;
-        //    }
-        //    
-        //    
-        //    for (unsigned int j = 0; j < doubleArray.length(); ++j)
-        //    {
-        //        double value = doubleArray[j];
-        //        unsigned int cindex = indiceArray[j];
-        //        MPoint controlVerPos = mayaControlPoints[cindex];
-        //        controlVerPos.w = value;
-        //        deltaPos += controlVerPos;
-        //        // Do something with value
-        //        MGlobal::displayInfo(MString("  Index ") + j + ": " + value);
-        //    }
-        //}
-        unsigned int vertexacount = iter.count();
-        if (vertexacount != numElements && vertexacount != numControlElements)
+
+        
+        //unsigned int vertexacount = iter.count();
+        if (vertexCount != numElements && vertexCount != numControlElements)
         {
             //MGlobal::displayError(MString("vertexacount != numElements && vertexacount != numControlElements is not valid"));
             status = MS::kFailure;
@@ -560,6 +525,8 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         // Now you have the double array for the current element
         // You can process it as needed
         //MGlobal::displayInfo(MString("Element ") + i + ":");
+        
+
         if (doubleArray.length() != indiceArray.length())
         {
             status = MS::kFailure;
@@ -567,33 +534,38 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
             return status;
         }
 
-        MPoint deltaPos = MPoint();
-        for (unsigned int j = 0; j < doubleArray.length(); ++j)
+
+        // center
+        MArrayDataHandle CenterHandle = dataBlock.inputArrayValue(aCenterOfInfluenceVertex, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        CenterHandle.jumpToElement(ptindex);
+        MDataHandle datacenterHandle = CenterHandle.inputValue(&status);
+        MVector Origcenter = datacenterHandle.asVector();
+
+        MPoint currentCenter = MPoint();
+        for (size_t idx = 0; idx < maxInfluence; ++idx)
         {
-            double value = envelope*doubleArray[j];
-            unsigned int cindex = indiceArray[j];
-            MPoint controlVerPos = mayaControlPoints[cindex]-mayaRestControlPoints[cindex];
-            controlVerPos.x *= value;
-            controlVerPos.y *= value;
-            controlVerPos.z *= value;
-            deltaPos += controlVerPos;
-            // Do something with value
-            //MGlobal::displayInfo(MString("  Index ") + j + ": " + value);
+            unsigned int cindex = indiceArray[idx];
+            MPoint rpt = mayaControlPoints[cindex];
+            currentCenter += rpt;
+
         }
-        //deltaPos.w = envelope;
-        MPoint pt = iter.position()+ deltaPos;
+        // store center points
+        currentCenter.x /= bMaxInfluen;
+        currentCenter.y /= bMaxInfluen;
+        currentCenter.z /= bMaxInfluen;
+    
+
+        MVector moved = MVector((currentCenter.x- Origcenter.x)*envelope, (currentCenter.y - Origcenter.y) * envelope, (currentCenter.z - Origcenter.z) * envelope);
+        MPoint deltaPos = MPoint();
+        deltaPos.x = moved.x; deltaPos.y = moved.y; deltaPos.z = moved.z;
+        
+        MPoint pt = iter.position() + deltaPos;
         //MPoint pt(deformation(ptindex, 0) * envelope, deformation(ptindex, 1) * envelope, deformation(ptindex, 2) * envelope);
         iter.setPosition(pt);
     }
-    //MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
-    //MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
-    //MGlobal::displayInfo(MString("number of mayaRestVertices:") + (mayaRestVertices.length()));
-    //MGlobal::displayInfo(MString("number of EigenControlPoints:") + EigenControlPoints.rows());
-    //MGlobal::displayInfo(MString("number of weightsMatrixOrig:") + weightsMatrixOrig.rows());
-    //MGlobal::displayInfo(MString("number  column of weightsMatrixOrig:") + weightsMatrixOrig.cols());
-    //MGlobal::displayInfo(MString("number of weightsMatrixUpdated:") + weightsMatrixUpdated.rows());
-    //MGlobal::displayInfo(MString("epsilon:") + epsilon);
-    
+    //
+
 
     return MS::kSuccess;
 }
@@ -656,4 +628,3 @@ MStatus uninitializePlugin(MObject obj) {
     MFnPlugin plugin(obj);
     return plugin.deregisterNode(RBFDeformerNode::id);
 }
-
