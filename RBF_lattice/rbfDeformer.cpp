@@ -13,6 +13,11 @@
 #include <maya/MFnData.h> 
 #include<maya/MFnMatrixArrayData.h>
 #include<maya/MFnMatrixAttribute.h>
+#include<maya/MFnArrayAttrsData.h>
+#include <maya/MArrayDataBuilder.h>
+#include<maya/MFnIntArrayData.h>
+#include<maya/MFnDoubleArrayData.h>
+
 class RBFDeformerNode : public MPxDeformerNode {
 public:
     static MTypeId id;
@@ -20,7 +25,8 @@ public:
     static MObject aControlMesh;
     static MObject aControlMeshTransform;
     static MObject aMaxInfluence;
-    
+    static MObject aClosestIndices;
+    static MObject aWeightBasedClosestIndices;
     
     
     bool isInitialized = false;
@@ -54,11 +60,12 @@ private:
     Eigen::MatrixXd EigenControlPoints;
     Eigen::MatrixXd RestEigenControlPoints;
     MPointArray mayaControlPoints;
+    MPointArray mayaRestControlPoints;
     Eigen::MatrixXd weightsMatrixUpdated;
     Eigen::MatrixXd deformedControlPoints;
     Eigen::MatrixXd weightsMatrixOrig;
     bool epsilonUpdated = false;
-    bool maxInfluentUpdated = false;
+    bool maxInfluentUpdated = true;
 
     
    
@@ -69,6 +76,8 @@ MObject RBFDeformerNode::aEpsilon;
 MObject RBFDeformerNode::aControlMesh;
 MObject RBFDeformerNode::aControlMeshTransform;
 MObject RBFDeformerNode::aMaxInfluence;
+MObject RBFDeformerNode::aClosestIndices;
+MObject RBFDeformerNode::aWeightBasedClosestIndices;
 MStatus RBFDeformerNode::initialize()
 {
     MFnTypedAttribute tAttr;
@@ -118,6 +127,46 @@ MStatus RBFDeformerNode::initialize()
 
     // Attribute affects
     attributeAffects(aMaxInfluence, outputGeom);
+
+    // Create the integer array attribute
+    aClosestIndices = tAttr.create("closestIndices", "cidx", MFnData::kIntArray, MObject::kNullObj, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    // Set it as a multi (array) attribute
+    tAttr.setArray(true);
+    tAttr.setUsesArrayDataBuilder(true);
+
+    // Optional: Set other attribute properties if needed
+    tAttr.setReadable(true);
+    tAttr.setWritable(true);
+    tAttr.setStorable(true);
+    tAttr.setKeyable(true);
+    tAttr.setCached(true);
+    // Add the attribute to the node
+    status = addAttribute(aClosestIndices);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+    // Attribute affects
+    attributeAffects(aClosestIndices, outputGeom);
+
+    // Create the Double array attribute
+    aWeightBasedClosestIndices = tAttr.create("WeightBasedClosestIndices", "wtBCIndices", MFnData::kDoubleArray, MObject::kNullObj, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    // Set it as a multi (array) attribute
+    tAttr.setArray(true);
+    tAttr.setUsesArrayDataBuilder(true);
+
+    // Optional: Set other attribute properties if needed
+    tAttr.setReadable(true);
+    tAttr.setWritable(true);
+    tAttr.setStorable(true);
+    tAttr.setKeyable(true);
+    tAttr.setCached(true);
+    // Add the attribute to the node
+    status = addAttribute(aWeightBasedClosestIndices);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+    // Attribute affects
+    attributeAffects(aWeightBasedClosestIndices, outputGeom);
 
     return MS::kSuccess;
 }
@@ -213,8 +262,8 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
     //bool hasControlMesh = !aControlMesh.isNull();
     if (hasControlMesh==false) {
-        MGlobal::displayWarning("control mesh is not connected");
-        MGlobal::displayWarning(MString("should recalculate weights :")+(enableRecalcualte) );
+        //MGlobal::displayWarning("control mesh is not connected");
+        //MGlobal::displayWarning(MString("should recalculate weights :")+(enableRecalcualte) );
         return status;
     }
     //enableRecalcualte
@@ -232,75 +281,318 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     for (unsigned int i = 0; i < numberControlPoints; ++i)
     {
         EigenControlPoints.row(i) << mayaControlPoints[i].x, mayaControlPoints[i].y, mayaControlPoints[i].z;
-        MGlobal::displayInfo(MString("RestPoint: ") + mayaControlPoints[i].x + " " + mayaControlPoints[i].y + " " + mayaControlPoints[i].z);
+        //MGlobal::displayInfo(MString("RestPoint: ") + mayaControlPoints[i].x + " " + mayaControlPoints[i].y + " " + mayaControlPoints[i].z);
     }
     if (enableRecalcualte)
     {
-        MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
+        //MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
         // -----------rest mesh---------------------------
         RestEigenControlPoints = EigenControlPoints;
+        mayaRestControlPoints = mayaControlPoints;
         iter.allPositions(mayaRestVertices);
         int numberVertices = mayaRestVertices.length();
-        
-        eigenRestVertices.resize(numberVertices,3);
+
+        eigenRestVertices.resize(numberVertices, 3);
 
         for (unsigned int i = 0; i < numberVertices; ++i)
         {
             eigenRestVertices.row(i) << mayaRestVertices[i].x, mayaRestVertices[i].y, mayaRestVertices[i].z;
-            MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
+            //MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
         }
-        
-       
-        computeInitialWeights(eigenRestVertices, RestEigenControlPoints, weightsMatrixOrig);
-        updateWeightsAndOffsets(weightsMatrixOrig,epsilon, EigenControlPoints,weightsMatrixUpdated,offsets,eigenRestVertices);
-        
-        
-        //---------------------update paramter for next calulation---------
         enableRecalcualte = false;
-        MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
-        MGlobal::displayInfo(MString("number of verticescontrolPoint:") + (numberControlPoints));
     }
+    //    
+    //   
+    //    computeInitialWeights(eigenRestVertices, RestEigenControlPoints, weightsMatrixOrig);
+    //    updateWeightsAndOffsets(weightsMatrixOrig,epsilon, EigenControlPoints,weightsMatrixUpdated,offsets,eigenRestVertices);
+    //    
+    //    
+    //    //---------------------update paramter for next calulation---------
+    //    enableRecalcualte = false;
+    //    MGlobal::displayWarning(MString("set enableRecalcualte: ") + (enableRecalcualte));
+    //    MGlobal::displayInfo(MString("number of verticescontrolPoint:") + (numberControlPoints));
+    //}
+ 
     if(epsilonUpdated)
     {
-        updateWeightsAndOffsets(weightsMatrixOrig, epsilon, RestEigenControlPoints, weightsMatrixUpdated, offsets, eigenRestVertices);
+        //updateWeightsAndOffsets(weightsMatrixOrig, epsilon, RestEigenControlPoints, weightsMatrixUpdated, offsets, eigenRestVertices);
         epsilonUpdated = false;
     }
     if (maxInfluentUpdated == true)
     {
+        //store rest MayaControlPoints
+        
         // Retrieve maxInfluence value
         int maxInfluence = dataBlock.inputValue(aMaxInfluence, &status).asInt();
+        int vertexNumber = mayaRestVertices.length();
         CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        std::vector<int> indexInfluent = getNClosestControlPoints(204,maxInfluence,eigenRestVertices,RestEigenControlPoints);
-        for (unsigned ind : indexInfluent)
+        
+        
+        // Create an MArrayDataBuilder for the multi-attribute
+        MArrayDataBuilder builder(&dataBlock,aClosestIndices, vertexNumber, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        // Create an MArrayDataBuilder for the multi-attribute
+        MArrayDataBuilder weightbuilder(&dataBlock, aWeightBasedClosestIndices, vertexNumber, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+     
+
+        //for (unsigned int i = 0; i < vertexNumber; ++i)
+        for (; !iter.isDone(); iter.next())
         {
-            MGlobal::displayInfo(MString("indexInfluent: ") + ind);
+            unsigned ptindex = iter.index();
+            MPoint pt = iter.position();
+            
+        
+            // Get the closest control points for the current vertex
+            std::vector<int> indexInfluent = getNClosestControlPoints(ptindex, maxInfluence, eigenRestVertices, RestEigenControlPoints);
+
+            // Add an element to the builder
+            MDataHandle hElement = builder.addElement(ptindex, &status);
+            CHECK_MSTATUS_AND_RETURN_IT(status);
+            // Add an element to the weightbuilder
+            MDataHandle hWeightElement = weightbuilder.addElement(ptindex, &status);
+            CHECK_MSTATUS_AND_RETURN_IT(status);
+
+
+            // Create and set the data for this element
+            MFnIntArrayData intArrayDataFn;
+            MIntArray intArray;
+            MFnDoubleArrayData DoubleArrayWeightsDataFn;
+            MDoubleArray doubleArrayWeights;
+
+
+            // Populate intArray with values from indexInfluent
+            double sumdis = 0;
+            std::vector<double> dis;
+            dis.resize(maxInfluence);
+            for (size_t idx = 0; idx < maxInfluence; ++idx)
+            {
+                
+                intArray.append(indexInfluent[idx]);
+                MPoint rpt = mayaRestControlPoints[idx];
+                double r=sqrt(pow((rpt.x-pt.x),2)+ pow((rpt.y - pt.y), 2)+ pow((rpt.z - pt.z), 2));
+                
+                sumdis += r;
+                dis[idx] = r;
+            }
+            std::vector<double> weights;
+            double sumWeights = 0.0;
+            double eps = 1e-8; // Small value to prevent division by zero
+
+
+            for (size_t idx = 0; idx < maxInfluence; ++idx)
+            {
+                double weight = 1.0/std::pow(dis[idx]+eps,2);
+                weights.push_back(weight);
+                sumWeights += weight;
+                
+            }
+            // Normalize weights
+            for (double& weight : weights)
+            {
+                weight /= sumWeights;
+                doubleArrayWeights.append(weight);
+            }
+
+            // Create an MObject from the MIntArray
+            MObject intArrayDataObj = intArrayDataFn.create(intArray, &status);
+            CHECK_MSTATUS_AND_RETURN_IT(status);
+            // Create an MObject from the doubleArrayWeights
+            MObject doubleArrayWeightsObj = DoubleArrayWeightsDataFn.create(doubleArrayWeights, &status);
+            CHECK_MSTATUS_AND_RETURN_IT(status);
+
+            // **Set the data to the element handle using setMObject**
+            hElement.setMObject(intArrayDataObj);
+            // **Set the data to the element handle using setMObject**
+            hWeightElement.setMObject(doubleArrayWeightsObj);
+
+
+            // Optionally, mark the element handle as clean
+            hElement.setClean();
+            hWeightElement.setClean();
+  
+
+
         }
-        MGlobal::displayInfo(MString("maxInfluentUpdated: ")+ maxInfluence);
+
+        // Get the output array handle and set the builder
+        MArrayDataHandle hArray = dataBlock.outputArrayValue(aClosestIndices, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        status = hArray.set(builder);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Mark the array as clean
+        hArray.setAllClean();
+
+        // Get the output array handle and set the builder
+        MArrayDataHandle hDoubleArray = dataBlock.outputArrayValue(aWeightBasedClosestIndices, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        status = hDoubleArray.set(weightbuilder);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Mark the array as clean
+        hDoubleArray.setAllClean();
+          
+
+
+
+
+        maxInfluentUpdated = false;
     }
 
-       //
-    //deformedControlPoints=
-    Eigen::MatrixXd deformation = applyRBFDeformation(weightsMatrixUpdated, offsets, EigenControlPoints);
-    //for (unsigned int i = 0; i < deformation.rows(); ++i) {
-    //    MPoint pt(iter.position().x + deformation(i, 0) * envelope,
-    //        iter.position().y + deformation(i, 1) * envelope,
-    //        iter.position().z + deformation(i, 2) * envelope);
-    //    iter.setPosition(pt);
+    //   //
+    
+
     for (; !iter.isDone(); iter.next())
     {
+        // Access the output array attribute
+        MArrayDataHandle weightIndicesHandle = dataBlock.outputArrayValue(aWeightBasedClosestIndices, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Get the number of elements in the array
+        unsigned int numElements = weightIndicesHandle.elementCount(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Access the output array attribute
+        MArrayDataHandle closestPointConstrolIndicesHandle = dataBlock.outputArrayValue(aClosestIndices, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Get the number of elements in the array
+        unsigned int numControlElements = closestPointConstrolIndicesHandle.elementCount(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        
+        
+        //// Iterate over each element in the multi-attribute
+        //for (unsigned int i = 0; i < numElements; ++i)
+        //{
+        //    // Jump to the current array element
+        //    status = weightIndicesHandle.jumpToArrayElement(i);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    //Jump to the current closest controlpoint index
+        //    status = closestPointConstrolIndicesHandle.jumpToArrayElement(i);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        //    // Get the data handle for the current element
+        //    MDataHandle elementHandle = weightIndicesHandle.inputValue(&status);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    MDataHandle closestIndicesElement = closestPointConstrolIndicesHandle.inputValue(&status);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    
+        //    // Get the MObject containing the MDoubleArrayData
+        //    MObject doubleArrayDataObj = elementHandle.data();
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    MObject closestArrayIndicesDataObj = closestIndicesElement.data();
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    
+        //    // Create an MFnDoubleArrayData function set to access the data
+        //    MFnDoubleArrayData doubleArrayDataFn(doubleArrayDataObj, &status);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    MFnIntArrayData closestArrayDataFn(closestArrayIndicesDataObj, &status);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    
+        //    // Get the MDoubleArray from the function set
+        //    MDoubleArray doubleArray = doubleArrayDataFn.array(&status);
+        //    CHECK_MSTATUS_AND_RETURN_IT(status);
+        //    MIntArray indiceArray = closestArrayDataFn.array(&status);
+        //    // Now you have the double array for the current element
+        //    // You can process it as needed
+        //    //MGlobal::displayInfo(MString("Element ") + i + ":");
+        //    if (doubleArray.length() != indiceArray.length())
+        //    {
+        //        status = MS::kFailure;
+        //        MGlobal::displayError(MString(" length of weight and index is not fit"));
+        //        return status;
+        //    }
+        //    
+        //    
+        //    for (unsigned int j = 0; j < doubleArray.length(); ++j)
+        //    {
+        //        double value = doubleArray[j];
+        //        unsigned int cindex = indiceArray[j];
+        //        MPoint controlVerPos = mayaControlPoints[cindex];
+        //        controlVerPos.w = value;
+        //        deltaPos += controlVerPos;
+        //        // Do something with value
+        //        MGlobal::displayInfo(MString("  Index ") + j + ": " + value);
+        //    }
+        //}
+        unsigned int vertexacount = iter.count();
+        if (vertexacount != numElements && vertexacount != numControlElements)
+        {
+            //MGlobal::displayError(MString("vertexacount != numElements && vertexacount != numControlElements is not valid"));
+            status = MS::kFailure;
+            return status;
+        }
         unsigned ptindex = iter.index();
-        MPoint pt(deformation(ptindex, 0) * envelope, deformation(ptindex, 1) * envelope, deformation(ptindex, 2) * envelope);
+        // Jump to the current array element
+        status = weightIndicesHandle.jumpToArrayElement(ptindex);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        //Jump to the current closest controlpoint index
+        status = closestPointConstrolIndicesHandle.jumpToArrayElement(ptindex);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Get the data handle for the current element
+        MDataHandle elementHandle = weightIndicesHandle.inputValue(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        MDataHandle closestIndicesElement = closestPointConstrolIndicesHandle.inputValue(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Get the MObject containing the MDoubleArrayData
+        MObject doubleArrayDataObj = elementHandle.data();
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        MObject closestArrayIndicesDataObj = closestIndicesElement.data();
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Create an MFnDoubleArrayData function set to access the data
+        MFnDoubleArrayData doubleArrayDataFn(doubleArrayDataObj, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        MFnIntArrayData closestArrayDataFn(closestArrayIndicesDataObj, &status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+
+        // Get the MDoubleArray from the function set
+        MDoubleArray doubleArray = doubleArrayDataFn.array(&status);
+        CHECK_MSTATUS_AND_RETURN_IT(status);
+        MIntArray indiceArray = closestArrayDataFn.array(&status);
+        // Now you have the double array for the current element
+        // You can process it as needed
+        //MGlobal::displayInfo(MString("Element ") + i + ":");
+        if (doubleArray.length() != indiceArray.length())
+        {
+            status = MS::kFailure;
+            //MGlobal::displayError(MString(" doubleArray.length() != indiceArray.length() is not fited"));
+            return status;
+        }
+
+        MPoint deltaPos = MPoint();
+        for (unsigned int j = 0; j < doubleArray.length(); ++j)
+        {
+            double value = envelope*doubleArray[j];
+            unsigned int cindex = indiceArray[j];
+            MPoint controlVerPos = mayaControlPoints[cindex]-mayaRestControlPoints[cindex];
+            controlVerPos.x *= value;
+            controlVerPos.y *= value;
+            controlVerPos.z *= value;
+            deltaPos += controlVerPos;
+            // Do something with value
+            //MGlobal::displayInfo(MString("  Index ") + j + ": " + value);
+        }
+        //deltaPos.w = envelope;
+        MPoint pt = iter.position()+ deltaPos;
+        //MPoint pt(deformation(ptindex, 0) * envelope, deformation(ptindex, 1) * envelope, deformation(ptindex, 2) * envelope);
         iter.setPosition(pt);
     }
-    MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
-    MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
-    MGlobal::displayInfo(MString("number of mayaRestVertices:") + (mayaRestVertices.length()));
-    MGlobal::displayInfo(MString("number of EigenControlPoints:") + EigenControlPoints.rows());
-    MGlobal::displayInfo(MString("number of weightsMatrixOrig:") + weightsMatrixOrig.rows());
-    MGlobal::displayInfo(MString("number  column of weightsMatrixOrig:") + weightsMatrixOrig.cols());
-    MGlobal::displayInfo(MString("number of weightsMatrixUpdated:") + weightsMatrixUpdated.rows());
-    MGlobal::displayInfo(MString("epsilon:") + epsilon);
+    //MGlobal::displayWarning(MString("hasControlMesh: ") + (hasControlMesh));
+    //MGlobal::displayWarning(MString("enableRecalcualte: ") + (enableRecalcualte));
+    //MGlobal::displayInfo(MString("number of mayaRestVertices:") + (mayaRestVertices.length()));
+    //MGlobal::displayInfo(MString("number of EigenControlPoints:") + EigenControlPoints.rows());
+    //MGlobal::displayInfo(MString("number of weightsMatrixOrig:") + weightsMatrixOrig.rows());
+    //MGlobal::displayInfo(MString("number  column of weightsMatrixOrig:") + weightsMatrixOrig.cols());
+    //MGlobal::displayInfo(MString("number of weightsMatrixUpdated:") + weightsMatrixUpdated.rows());
+    //MGlobal::displayInfo(MString("epsilon:") + epsilon);
     
 
     return MS::kSuccess;
@@ -365,42 +657,3 @@ MStatus uninitializePlugin(MObject obj) {
     return plugin.deregisterNode(RBFDeformerNode::id);
 }
 
-//std::vector<int>RBFDeformerNode::getNClosestControlPoints(int vertexIndex, int n,
-//    const Eigen::MatrixXd& vertices, const Eigen::MatrixXd& controlPoints) {
-//
-//    // Get the position of the input mesh vertex at index i
-//    Eigen::Vector3d vertexPosition = vertices.row(vertexIndex);
-//
-//    // Number of control points
-//    int numControlPoints = controlPoints.rows();
-//
-//    // Vector to store distances and corresponding control point indices
-//    std::vector<std::pair<double, int>> distanceIndexPairs;
-//
-//    // Compute distances from the input vertex to each control point
-//    for (int j = 0; j < numControlPoints; ++j) {
-//        double distance = (vertexPosition - controlPoints.row(j)).norm();
-//        distanceIndexPairs.emplace_back(distance, j);
-//    }
-//
-//    // Partially sort the vector to get the n closest control points
-//    std::nth_element(distanceIndexPairs.begin(), distanceIndexPairs.begin() + n, distanceIndexPairs.end(),
-//        [](const std::pair<double, int>& a, const std::pair<double, int>& b) {
-//            return a.first < b.first;
-//        });
-//
-//    // Extract the indices of the n closest control points
-//    std::vector<int> closestIndices;
-//    closestIndices.reserve(n);
-//    for (int k = 0; k < n && k < numControlPoints; ++k) {
-//        closestIndices.push_back(distanceIndexPairs[k].second);
-//    }
-//
-//    // Optional: Sort the indices based on distance (smallest to largest)
-//    std::sort(closestIndices.begin(), closestIndices.end(),
-//        [&distanceIndexPairs](int a, int b) {
-//            return distanceIndexPairs[a].first < distanceIndexPairs[b].first;
-//        });
-//
-//    return closestIndices;
-//}
