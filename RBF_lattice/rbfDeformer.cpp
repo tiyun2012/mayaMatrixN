@@ -153,6 +153,7 @@ public:
     MStatus deform(MDataBlock& dataBlock, MItGeometry& iter,
         const MMatrix& localToWorldMatrix, unsigned int geomIndex) override;
     std::vector<int> getNClosestControlPoints(int vertexIndex, int n, const Eigen::MatrixXd& vertices, const Eigen::MatrixXd& controlPoints);
+    ~RBFDeformerNode();
 private:
     //bool controlMeshChanged = false;
     //bool controlMeshSourceChanged = false;
@@ -166,12 +167,13 @@ private:
     Eigen::MatrixXd RestEigenControlPoints;
     MPointArray mayaControlPoints;
     MPointArray mayaRestControlPoints;
+    std::vector<Point> restControlPoints;
     Eigen::MatrixXd weightsMatrixUpdated;
     Eigen::MatrixXd deformedControlPoints;
     Eigen::MatrixXd weightsMatrixOrig;
     bool epsilonUpdated = true;
     bool maxInfluentUpdated = true;
-
+    KDTree* tree;
 
 
 };
@@ -367,7 +369,7 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     //MGlobal::displayInfo(MString("controlMeshChanged:") + controlMeshChanged);
     //bool hasControlMesh = !aControlMesh.isNull();
     if (hasControlMesh == false) {
-        //MGlobal::displayWarning("control mesh is not connected");
+        MGlobal::displayWarning("control mesh is not connected");
         //MGlobal::displayWarning(MString("should recalculate weights :")+(enableRecalcualte) );
         return status;
     }
@@ -381,6 +383,7 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     status = controlMeshFun.getPoints(mayaControlPoints, MSpace::kWorld);
     CHECK_MSTATUS_AND_RETURN_IT(status);
     int numberControlPoints = mayaControlPoints.length();
+    unsigned int vertexacount = iter.count();
     EigenControlPoints.resize(numberControlPoints, 3);
     //Eigen::MatrixXd EigenControlPoints(numberControlPoints, 3);
     for (unsigned int i = 0; i < numberControlPoints; ++i)
@@ -392,18 +395,25 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
     {
         //MGlobal::displayWarning("update logic when controlMeshSourceChanged.");
         // -----------rest mesh---------------------------
-        RestEigenControlPoints = EigenControlPoints;
+        //RestEigenControlPoints = EigenControlPoints;
         mayaRestControlPoints = mayaControlPoints;
         iter.allPositions(mayaRestVertices);
-        int numberVertices = mayaRestVertices.length();
+        //int numberVertices = mayaRestVertices.length();
 
-        eigenRestVertices.resize(numberVertices, 3);
+        eigenRestVertices.resize(vertexacount, 3);
+        restControlPoints.resize(numberControlPoints);
 
-        for (unsigned int i = 0; i < numberVertices; ++i)
+        for ( int i = 0; i < vertexacount; ++i)
         {
             eigenRestVertices.row(i) << mayaRestVertices[i].x, mayaRestVertices[i].y, mayaRestVertices[i].z;
+            
             //MGlobal::displayInfo(MString("restMesh: ") + mayaRestVertices[i].x + " " + mayaRestVertices[i].y + " " + mayaRestVertices[i].z);
         }
+        for (int i = 0; i < numberControlPoints; ++i)
+        {
+            restControlPoints[i] = { mayaRestControlPoints[i].x, mayaRestControlPoints[i].y, mayaRestControlPoints[i].z, i };
+        }
+        tree=new KDTree(restControlPoints);
         enableRecalcualte = false;
     }
     
@@ -441,8 +451,9 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
 
 
             // Get the closest control points for the current vertex
-            std::vector<int> indexInfluent = getNClosestControlPoints(ptindex, maxInfluence, eigenRestVertices, RestEigenControlPoints);
-
+            //std::vector<int> indexInfluent = getNClosestControlPoints(ptindex, maxInfluence, eigenRestVertices, RestEigenControlPoints);
+            Point target = { pt.x,pt.y,pt.z,-1 };
+            std::vector<int> indexInfluent = tree->findKNearest(target, maxInfluence); 
             // Add an element to the builder
             MDataHandle hElement = builder.addElement(ptindex, &status);
             CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -539,26 +550,33 @@ MStatus RBFDeformerNode::deform(MDataBlock& dataBlock, MItGeometry& iter,
         maxInfluentUpdated = false;
     }
 
-    //   //
+    //  main
 
+            // Access the output array attribute
+    MArrayDataHandle weightIndicesHandle = dataBlock.outputArrayValue(aWeightBasedClosestIndices, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
 
+    // Get the number of elements in the array
+    unsigned int numElements = weightIndicesHandle.elementCount(&status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    // Access the output array attribute
+    MArrayDataHandle closestPointConstrolIndicesHandle = dataBlock.outputArrayValue(aClosestIndices, &status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    // Get the number of elements in the array
+    unsigned int numControlElements = closestPointConstrolIndicesHandle.elementCount(&status);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+    
+    if (vertexacount != numElements && vertexacount != numControlElements)
+    {
+        //MGlobal::displayError(MString("vertexacount != numElements && vertexacount != numControlElements is not valid"));
+        status = MS::kFailure;
+        return status;
+    }
     for (; !iter.isDone(); iter.next())
     {
-        // Access the output array attribute
-        MArrayDataHandle weightIndicesHandle = dataBlock.outputArrayValue(aWeightBasedClosestIndices, &status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
 
-        // Get the number of elements in the array
-        unsigned int numElements = weightIndicesHandle.elementCount(&status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-
-        // Access the output array attribute
-        MArrayDataHandle closestPointConstrolIndicesHandle = dataBlock.outputArrayValue(aClosestIndices, &status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
-
-        // Get the number of elements in the array
-        unsigned int numControlElements = closestPointConstrolIndicesHandle.elementCount(&status);
-        CHECK_MSTATUS_AND_RETURN_IT(status);
 
 
         unsigned int vertexacount = iter.count();
@@ -696,4 +714,9 @@ MStatus initializePlugin(MObject obj) {
 MStatus uninitializePlugin(MObject obj) {
     MFnPlugin plugin(obj);
     return plugin.deregisterNode(RBFDeformerNode::id);
+}
+
+
+RBFDeformerNode::~RBFDeformerNode() {
+    delete tree;
 }
