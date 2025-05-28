@@ -5,8 +5,11 @@
 #include <maya/MMatrix.h>
 #include <maya/MFloatVector.h>
 #include <maya/MGlobal.h>
+#include <maya/MFnTypedAttribute.h>  // For mesh attribute types
+#include <maya/MFnNumericAttribute.h>  // For numeric attributes if needed
 
 MTypeId SimpleDeformerNode::id(0x00122C02); // Unique Node ID
+MObject SimpleDeformerNode::restMeshAttribute;
 
 void* SimpleDeformerNode::creator() {
     return new SimpleDeformerNode();
@@ -14,8 +17,19 @@ void* SimpleDeformerNode::creator() {
 
 MStatus SimpleDeformerNode::initialize() {
     MStatus stat;
+    MFnTypedAttribute tAttr;
 
-   
+    // Create the restMesh attribute (assuming it's a mesh)
+    restMeshAttribute = tAttr.create("restMesh", "rm", MFnData::kMesh);
+    tAttr.setStorable(true);
+    tAttr.setKeyable(true);
+
+    // Add the attribute to the node
+    addAttribute(restMeshAttribute);
+
+    // Ensure the deformer updates when restMesh is connected
+    attributeAffects(restMeshAttribute, outputGeom);
+
 
     return MS::kSuccess;
 }
@@ -58,3 +72,20 @@ MStatus uninitializePlugin(MObject obj) {
 
     return MS::kSuccess;
 }
+
+void SimpleDeformerNode::updateRestMesh() {
+    MGlobal::displayInfo("Hello restmesh");  // Use MGlobal to print in Maya's script editor
+}
+
+MStatus SimpleDeformerNode::compute(const MPlug& plug, MDataBlock& dataBlock) {
+    // Existing code...
+
+    //// Check if the restMesh attribute is being updated
+    //if (plug == restMeshAttribute) {
+    //    updateRestMesh();  // Call your new function
+    //}
+
+    // Existing code...
+    return MS::kSuccess;
+}
+

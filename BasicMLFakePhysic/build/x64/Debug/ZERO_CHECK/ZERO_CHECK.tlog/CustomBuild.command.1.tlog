@@ -1,0 +1,10 @@
+^E:\DEV\RBF\POINTSDATA\BASICMLFAKEPHYSIC\BUILD\CMAKEFILES\904B3C35DAF176D7372C47E6F797373C\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SE:/dev/RBF/pointsData/BasicMLFakePhysic -BE:/dev/RBF/pointsData/BasicMLFakePhysic/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file E:/dev/RBF/pointsData/BasicMLFakePhysic/build/BasicML.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -14,10 +14,11 @@ public:
 
     static void* creator();
     static MStatus initialize();
-
+    static MObject restMeshAttribute;
     // Override the deform function
     virtual MStatus deform(MDataBlock& block, MItGeometry& iter, const MMatrix& mat, unsigned int multiIndex);
-
+    void updateRestMesh();  // Declare the function
+    MStatus compute(const MPlug& plug, MDataBlock& dataBlock);
     static MTypeId id;
 };
 
