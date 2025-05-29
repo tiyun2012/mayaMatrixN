@@ -67,6 +67,7 @@ public:
         MArgDatabase argData(syntax(), args);
         MObject meshObj, transformObj;
         int startFrame, endFrame;
+        std::string filePath = "E:/dev/RBF/pointsData/BasicMLFakePhysic/training_data.csv"; // Default path
 
         // Parse arguments
         MStatus status;
@@ -101,6 +102,15 @@ public:
             MGlobal::displayError("Failed to get end frame argument.");
             return status;
         }
+        if (argData.isFlagSet("-o")) {
+            MString outputPath;
+            status = argData.getFlagArgument("-o", 0, outputPath);
+            if (!status) {
+                MGlobal::displayError("Failed to get output path argument.");
+                return status;
+            }
+            filePath = outputPath.asChar();
+        }
 
         // Validate inputs
         if (endFrame < startFrame) {
@@ -121,8 +131,7 @@ public:
         }
         MPointArray vertices;
 
-        // Use absolute path for output file
-        std::string filePath = "E:/dev/RBF/pointsData/BasicMLFakePhysic/training_data.csv";
+        // Open output file
         std::ofstream file(filePath);
         if (!file.is_open()) {
             MGlobal::displayError(MString("Failed to open file: ") + filePath.c_str());
@@ -134,13 +143,14 @@ public:
         MGlobal::displayInfo(MString("Current working directory: ") + cwd.c_str());
 
         // Test file writing
-        std::ofstream testFile("E:/dev/RBF/pointsData/BasicMLFakePhysic/test.txt");
+        std::string testPath = std::filesystem::path(filePath).parent_path().string() + "/test.txt";
+        std::ofstream testFile(testPath);
         if (testFile.is_open()) {
             testFile << "Test";
             testFile.close();
             MGlobal::displayInfo("Test file written successfully.");
         } else {
-            MGlobal::displayError("Failed to write test file.");
+            MGlobal::displayError(MString("Failed to write test file: ") + testPath.c_str());
         }
 
         // Collect data for each frame
@@ -173,7 +183,7 @@ public:
             MGlobal::displayInfo(MString("Wrote frame ") + frame);
         }
         file.close();
-        // Fixed concatenation
+        // Format message
         std::ostringstream oss;
         oss << "Data collected for frames " << startFrame << " to " << endFrame << " and saved to " << filePath;
         MGlobal::displayInfo(MString(oss.str().c_str()));
@@ -186,6 +196,7 @@ public:
         syntax.addFlag("-t", "-transform", MSyntax::kSelectionItem);
         syntax.addFlag("-sf", "-startFrame", MSyntax::kLong);
         syntax.addFlag("-ef", "-endFrame", MSyntax::kLong);
+        syntax.addFlag("-o", "-output", MSyntax::kString); // Added output flag
         return syntax;
     }
 };
