@@ -176,16 +176,70 @@ void checkGLError(const char* operation) {
         std::cerr << "OpenGL error after " << operation << ": " << err << std::endl;
     }
 }
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse) {
-            std::cout << "Control panel context" << std::endl;
-        } else {
-            std::cout << "Viewport context" << std::endl;
-        }
+// Add this callback to update camera based on mouse movement
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) return; // do nothing if over an ImGui window
+
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    double dx = xpos - camera->lastX;
+    double dy = ypos - camera->lastY;
+    camera->lastX = xpos;
+    camera->lastY = ypos;
+
+    if (camera->isRotating) {
+        // update rotation (adjust sensitivity as needed)
+        camera->theta += static_cast<float>(dx * 0.005);
+        camera->phi   += static_cast<float>(dy * 0.005);
+        // Clamp phi to avoid flip (e.g., between 0.1 and PI - 0.1)
+        if (camera->phi < 0.1f)
+            camera->phi = 0.1f;
+        if (camera->phi > 3.04159f)
+            camera->phi = 3.04159f;
+    }
+    if (camera->isPanning) {
+        // Compute the right and up vectors based on the current view
+        Eigen::Vector3f eye;
+        eye.x() = camera->target.x() + camera->radius * sinf(camera->phi) * cosf(camera->theta);
+        eye.y() = camera->target.y() + camera->radius * cosf(camera->phi);
+        eye.z() = camera->target.z() + camera->radius * sinf(camera->phi) * sinf(camera->theta);
+        Eigen::Vector3f forward = (camera->target - eye).normalized();
+        Eigen::Vector3f up(0.0f, 1.0f, 0.0f);
+        Eigen::Vector3f right = forward.cross(up).normalized();
+        up = right.cross(forward).normalized();
+
+        // Adjust target by a factor proportional to the camera radius
+        float panSpeed = 0.005f * camera->radius;
+        camera->target += (-right * static_cast<float>(dx) + up * static_cast<float>(dy)) * panSpeed;
     }
 }
+// Update mouse button callback to set camera flags and retrieve starting cursor position:
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) {
+        std::cout << "Control panel context" << std::endl;
+        return;
+    }
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (action == GLFW_PRESS) {
+            camera->isRotating = true;
+            glfwGetCursorPos(window, &camera->lastX, &camera->lastY);
+        } else if (action == GLFW_RELEASE) {
+            camera->isRotating = false;
+        }
+        std::cout << "Viewport left click context" << std::endl;
+    } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+        if (action == GLFW_PRESS) {
+            camera->isPanning = true;
+            glfwGetCursorPos(window, &camera->lastX, &camera->lastY);
+        } else if (action == GLFW_RELEASE) {
+            camera->isPanning = false;
+        }
+        std::cout << "Viewport right click context" << std::endl;
+    }
+}
+  
 int main() {
     // Initialize GLFW
     if (!glfwInit()) {
@@ -205,8 +259,11 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-    glfwSetMouseButtonCallback(window, mouse_button_callback); // Added callback
 
+    // Set our updated mouse button and cursor callbacks
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+  
     // Initialize GLAD to load OpenGL functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -224,6 +281,9 @@ int main() {
     ImGui_ImplOpenGL3_Init("#version 330");
     // camera setup
     Camera camera;
+    // Set the camera pointer in the GLFW window's user pointer so our callbacks can retrieve it.
+    glfwSetWindowUserPointer(window, &camera);
+
     // Load data
     Eigen::VectorXf inputMean, inputStd, outputMean, outputStd;
     std::vector<FrameData> data = parseCSV("E:/dev/RBF/pointsData/BasicMLFakePhysic/data/training_data.csv", inputMean, inputStd, outputMean, outputStd);
