@@ -317,8 +317,8 @@ int main() {
     projection(3, 2) = -1.0f;
     projection(3, 3) = 0.0f;
 
-    Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
-    view(2, 3) = -5.0f; // Move camera back
+    // Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
+    // view(2, 3) = -5.0f; // Move camera back
 
     int currentFrame = 0;
     bool showNormalized = false;
@@ -362,6 +362,12 @@ int main() {
         glEnable(GL_DEPTH_TEST);
         glUseProgram(shaderProgram);
 
+        // Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
+        // Eigen::Matrix4f mvp = projection * view * model;
+        // GLint mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
+        // glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp.data());
+    // Use camera view matrix
+        Eigen::Matrix4f view = camera.getViewMatrix();
         Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
         Eigen::Matrix4f mvp = projection * view * model;
         GLint mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
