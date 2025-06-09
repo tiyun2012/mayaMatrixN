@@ -142,7 +142,16 @@ void checkGLError(const char* operation) {
         std::cerr << "OpenGL error after " << operation << ": " << err << std::endl;
     }
 }
-
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse) {
+            std::cout << "Control panel context" << std::endl;
+        } else {
+            std::cout << "Viewport context" << std::endl;
+        }
+    }
+}
 int main() {
     // Initialize GLFW
     if (!glfwInit()) {
@@ -162,6 +171,7 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
+    glfwSetMouseButtonCallback(window, mouse_button_callback); // Added callback
 
     // Initialize GLAD to load OpenGL functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
