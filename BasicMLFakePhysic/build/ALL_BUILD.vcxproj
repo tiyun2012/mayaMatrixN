@@ -49,7 +49,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
-      <AdditionalIncludeDirectories>C:\Program Files\Autodesk\Maya2025;C:\Program Files\Autodesk\Maya2025\include;E:\dev\RBF\devkit2025\include;E:\dev\RBF\pointsData\Matrix;E:\dev\RBF\eigen-master;E:\dev\RBF\nanoflann-master\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\dev\RBF\pointsData\BasicMLFakePhysic\eigen-master;E:\dev\RBF\pointsData\BasicMLFakePhysic\glfw-3.4\include;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui\backends;E:\dev\RBF\pointsData\BasicMLFakePhysic\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -59,7 +59,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
-      <AdditionalIncludeDirectories>C:\Program Files\Autodesk\Maya2025;C:\Program Files\Autodesk\Maya2025\include;E:\dev\RBF\devkit2025\include;E:\dev\RBF\pointsData\Matrix;E:\dev\RBF\eigen-master;E:\dev\RBF\nanoflann-master\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\dev\RBF\pointsData\BasicMLFakePhysic\eigen-master;E:\dev\RBF\pointsData\BasicMLFakePhysic\glfw-3.4\include;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui\backends;E:\dev\RBF\pointsData\BasicMLFakePhysic\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -107,11 +107,9 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </ProjectReference>
-    <ProjectReference Include="E:\dev\RBF\pointsData\BasicMLFakePhysic\build\BasicML.vcxproj">
-      <Project>{BD8FBB06-5A65-3C83-85F1-61487D215312}</Project>
-      <Name>BasicML</Name>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    <ProjectReference Include="E:\dev\RBF\pointsData\BasicMLFakePhysic\build\VisualizePoints.vcxproj">
+      <Project>{77D6533E-69B7-38A2-9FF8-E0D819830CDA}</Project>
+      <Name>VisualizePoints</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

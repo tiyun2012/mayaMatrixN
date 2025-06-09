@@ -49,7 +49,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
-      <AdditionalIncludeDirectories>C:\Program Files\Autodesk\Maya2025;C:\Program Files\Autodesk\Maya2025\include;E:\dev\RBF\devkit2025\include;E:\dev\RBF\pointsData\Matrix;E:\dev\RBF\eigen-master;E:\dev\RBF\nanoflann-master\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\dev\RBF\pointsData\BasicMLFakePhysic\eigen-master;E:\dev\RBF\pointsData\BasicMLFakePhysic\glfw-3.4\include;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui\backends;E:\dev\RBF\pointsData\BasicMLFakePhysic\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -59,7 +59,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
-      <AdditionalIncludeDirectories>C:\Program Files\Autodesk\Maya2025;C:\Program Files\Autodesk\Maya2025\include;E:\dev\RBF\devkit2025\include;E:\dev\RBF\pointsData\Matrix;E:\dev\RBF\eigen-master;E:\dev\RBF\nanoflann-master\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\dev\RBF\pointsData\BasicMLFakePhysic\eigen-master;E:\dev\RBF\pointsData\BasicMLFakePhysic\glfw-3.4\include;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui;E:\dev\RBF\pointsData\BasicMLFakePhysic\imgui\backends;E:\dev\RBF\pointsData\BasicMLFakePhysic\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>

@@ -14,6 +14,9 @@
 # EXTERNAL cache entries
 ########################
 
+//Build the Maya plugin (MLVertexBaseTranform.mll)
+BUILD_MAYA_PLUGIN:BOOL=OFF
+
 //Value Computed by CMake
 BasicML_BINARY_DIR:STATIC=E:/dev/RBF/pointsData/BasicMLFakePhysic/build
 

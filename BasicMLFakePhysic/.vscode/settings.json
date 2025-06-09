@@ -5,6 +5,9 @@
     "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
     "C_Cpp.default.cppStandard": "c++17",
     "files.associations": {
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "dense": "cpp",
+        "fstream": "cpp",
+        "string": "cpp"
     }
 }

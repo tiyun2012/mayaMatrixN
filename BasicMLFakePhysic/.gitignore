@@ -1,0 +1,10 @@
+build
+*.pyc
+venv
+.venv
+imgui
+glfw-3.4
+gladLib
+eigen-master
+data
+build/** # Ignore all files in the build directory
