@@ -53,6 +53,40 @@
 //          parsing and rendering issues during development.
 #include <iostream>
 
+struct Camera {
+    float theta = 0.0f;    // Azimuthal angle (radians)
+    float phi = 0.0f;      // Polar angle (radians)
+    float radius = 5.0f;   // Distance from origin
+    Eigen::Vector3f target = Eigen::Vector3f::Zero(); // Look-at point
+    bool isRotating = false;
+    bool isPanning = false;
+    double lastX = 0.0;
+    double lastY = 0.0;
+
+    // Compute view matrix
+    Eigen::Matrix4f getViewMatrix() const {
+        Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
+        Eigen::Vector3f eye;
+        eye.x() = target.x() + radius * sinf(phi) * cosf(theta);
+        eye.y() = target.y() + radius * cosf(phi);
+        eye.z() = target.z() + radius * sinf(phi) * sinf(theta);
+
+        // Look-at matrix
+        Eigen::Vector3f forward = (target - eye).normalized();
+        Eigen::Vector3f up(0.0f, 1.0f, 0.0f);
+        Eigen::Vector3f right = forward.cross(up).normalized();
+        up = right.cross(forward).normalized();
+
+        Eigen::Matrix4f lookAt = Eigen::Matrix4f::Identity();
+        lookAt.block<1,3>(0,0) = right.transpose();
+        lookAt.block<1,3>(1,0) = up.transpose();
+        lookAt.block<1,3>(2,0) = -forward.transpose();
+        lookAt(0,3) = -right.dot(eye);
+        lookAt(1,3) = -up.dot(eye);
+        lookAt(2,3) = forward.dot(eye);
+        return lookAt;
+    }
+};
 struct FrameData {
     Eigen::MatrixXd transform; // 4x4 transform matrix (double for precision in calculations)
     Eigen::MatrixXf points;    // 98x3 raw points (float for OpenGL compatibility)
@@ -188,7 +222,8 @@ int main() {
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-
+    // camera setup
+    Camera camera;
     // Load data
     Eigen::VectorXf inputMean, inputStd, outputMean, outputStd;
     std::vector<FrameData> data = parseCSV("E:/dev/RBF/pointsData/BasicMLFakePhysic/data/training_data.csv", inputMean, inputStd, outputMean, outputStd);
