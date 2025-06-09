@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
-
+enable_language(C)
+project(MyProjectName C)
 # Declare the project name
 set(PROJECT_NAME BasicML)
 project(${PROJECT_NAME} LANGUAGES CXX)
