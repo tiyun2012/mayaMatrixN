@@ -5,7 +5,7 @@
             "name": "Debug VisualizePoints",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/VisualizePoints.exe",
+            "program": "${workspaceFolder}/build/Debug/VisualizePoints.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",

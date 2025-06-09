@@ -30,7 +30,7 @@
             ],
             "problemMatcher": [],
             "group": {
-                "kind": "clean",
+                "kind": "none",
                 "isDefault": true
             },
             "detail": "Cleans the build directory by removing all generated files"

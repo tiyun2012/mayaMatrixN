@@ -1,56 +1,22 @@
 // GLAD: OpenGL function loader for modern OpenGL (3.3 core profile).
-// Benefit: Loads OpenGL function pointers at runtime, enabling use of functions like glGenVertexArrays, glBindBuffer, etc.
-//          Required because GLFW only provides an OpenGL context, not function definitions. GLAD ensures compatibility
-//          with your OpenGL version and avoids manual function pointer management.
 #include <glad/glad.h>
 
-// GLFW: Cross-platform library for creating windows, handling OpenGL contexts, and managing input (keyboard, mouse).
-// Benefit: Simplifies window creation and OpenGL context setup, allowing focus on rendering. Provides event handling for
-//          user interaction (e.g., closing the window). Essential for rendering the 3D point cloud in a window.
+// GLFW: Cross-platform library for creating windows, handling OpenGL contexts, and managing input.
 #include <GLFW/glfw3.h>
 
-// ImGui: Immediate-mode GUI library for creating user interfaces (e.g., sliders, checkboxes).
-// Benefit: Enables quick creation of a control panel with a frame slider and "Show Normalized" checkbox. Lightweight and
-//          integrates seamlessly with GLFW and OpenGL, making it ideal for debugging and interactive data visualization.
+// ImGui: Immediate-mode GUI library for creating user interfaces.
 #include <imgui.h>
-
-// ImGui GLFW Backend: Connects ImGui with GLFW for input handling and window integration.
-// Benefit: Allows ImGui to process GLFW input events (e.g., mouse clicks on sliders). Ensures the GUI responds to user
-//          interactions within the GLFW window, critical for the frame slider functionality.
 #include <imgui_impl_glfw.h>
-
-// ImGui OpenGL Backend: Renders ImGui widgets using OpenGL.
-// Benefit: Draws ImGui’s GUI elements (e.g., sliders, buttons) on the OpenGL context. Ensures the control panel is
-//          rendered alongside the 3D point cloud, providing a unified visualization interface.
 #include <imgui_impl_opengl3.h>
 
 // Eigen: High-performance C++ library for linear algebra and matrix operations.
-// Benefit: Handles matrix operations for data processing (e.g., normalizing point coordinates, computing MVP matrices).
-//          Its template-based design is efficient and integrates well with your existing project (used in training code).
 #include <Eigen/Dense>
 
-// fstream: C++ standard library for file input/output operations.
-// Benefit: Enables reading training_data.csv to load frame data (transform matrices and points). Essential for accessing
-//          the dataset that drives the visualization.
+// Standard libraries
 #include <fstream>
-
-// sstream: C++ standard library for string stream operations.
-// Benefit: Facilitates parsing CSV lines by splitting comma-separated values into doubles. Simplifies data extraction
-//          from training_data.csv.
 #include <sstream>
-
-// vector: C++ standard library container for dynamic arrays.
-// Benefit: Stores frame data (transform matrices, points) in a resizable container, allowing flexible handling of
-//          variable numbers of frames from the CSV file.
 #include <vector>
-
-// string: C++ standard library for string manipulation.
-// Benefit: Manages file paths and CSV parsing (e.g., extracting tokens). Necessary for handling file I/O and error messages.
 #include <string>
-
-// iostream: C++ standard library for console input/output.
-// Benefit: Provides console logging for debugging (e.g., number of frames loaded, point coordinates). Helps verify data
-//          parsing and rendering issues during development.
 #include <iostream>
 
 struct Camera {
@@ -87,9 +53,10 @@ struct Camera {
         return lookAt;
     }
 };
+
 struct FrameData {
-    Eigen::MatrixXd transform; // 4x4 transform matrix (double for precision in calculations)
-    Eigen::MatrixXf points;    // 98x3 raw points (float for OpenGL compatibility)
+    Eigen::MatrixXd transform; // 4x4 transform matrix (double for precision)
+    Eigen::MatrixXf points;    // 98x3 raw points (float for OpenGL)
     Eigen::MatrixXf points_normalized; // 98x3 normalized points
 };
 
@@ -151,7 +118,7 @@ std::vector<FrameData> parseCSV(const std::string& filePath, Eigen::VectorXf& in
         }
     }
 
-    inputMean = Eigen::VectorXf::Zero(3); // Placeholder (not used for points)
+    inputMean = Eigen::VectorXf::Zero(3);
     inputStd = Eigen::VectorXf::Ones(3);
     outputMean = allPoints.colwise().mean();
     outputStd = ((allPoints.rowwise() - outputMean.transpose()).array().square().colwise().sum() / (allPoints.rows() - 1)).sqrt();
@@ -176,10 +143,10 @@ void checkGLError(const char* operation) {
         std::cerr << "OpenGL error after " << operation << ": " << err << std::endl;
     }
 }
-// Add this callback to update camera based on mouse movement
+
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse) return; // do nothing if over an ImGui window
+    if (io.WantCaptureMouse) return;
 
     Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
     double dx = xpos - camera->lastX;
@@ -188,17 +155,12 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     camera->lastY = ypos;
 
     if (camera->isRotating) {
-        // update rotation (adjust sensitivity as needed)
         camera->theta += static_cast<float>(dx * 0.005);
-        camera->phi   += static_cast<float>(dy * 0.005);
-        // Clamp phi to avoid flip (e.g., between 0.1 and PI - 0.1)
-        if (camera->phi < 0.1f)
-            camera->phi = 0.1f;
-        if (camera->phi > 3.04159f)
-            camera->phi = 3.04159f;
+        camera->phi += static_cast<float>(dy * 0.005);
+        if (camera->phi < 0.1f) camera->phi = 0.1f;
+        if (camera->phi > 3.04159f) camera->phi = 3.04159f;
     }
     if (camera->isPanning) {
-        // Compute the right and up vectors based on the current view
         Eigen::Vector3f eye;
         eye.x() = camera->target.x() + camera->radius * sinf(camera->phi) * cosf(camera->theta);
         eye.y() = camera->target.y() + camera->radius * cosf(camera->phi);
@@ -208,12 +170,11 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
         Eigen::Vector3f right = forward.cross(up).normalized();
         up = right.cross(forward).normalized();
 
-        // Adjust target by a factor proportional to the camera radius
         float panSpeed = 0.005f * camera->radius;
         camera->target += (-right * static_cast<float>(dx) + up * static_cast<float>(dy)) * panSpeed;
     }
 }
-// Update mouse button callback to set camera flags and retrieve starting cursor position:
+
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantCaptureMouse) {
@@ -225,29 +186,28 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         if (action == GLFW_PRESS) {
             camera->isRotating = true;
             glfwGetCursorPos(window, &camera->lastX, &camera->lastY);
+            std::cout << "Viewport left click context" << std::endl;
         } else if (action == GLFW_RELEASE) {
             camera->isRotating = false;
         }
-        std::cout << "Viewport left click context" << std::endl;
     } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (action == GLFW_PRESS) {
             camera->isPanning = true;
             glfwGetCursorPos(window, &camera->lastX, &camera->lastY);
+            std::cout << "Viewport right click context" << std::endl;
         } else if (action == GLFW_RELEASE) {
             camera->isPanning = false;
         }
-        std::cout << "Viewport right click context" << std::endl;
     }
 }
-  
+
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) return;
     Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-    // Adjust the camera radius based on scroll input (zoom factor)
     camera->radius -= static_cast<float>(yoffset) * 0.5f;
-    if (camera->radius < 1.0f)
-        camera->radius = 1.0f;
-    if (camera->radius > 50.0f)
-        camera->radius = 50.0f;
+    if (camera->radius < 1.0f) camera->radius = 1.0f;
+    if (camera->radius > 50.0f) camera->radius = 50.0f;
 }
 
 int main() {
@@ -270,12 +230,14 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
-    // Set our updated mouse button and cursor callbacks
+    // Set input callbacks
+    Camera camera;
+    glfwSetWindowUserPointer(window, &camera);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetScrollCallback(window, scroll_callback);
-  
-    // Initialize GLAD to load OpenGL functions
+
+    // Initialize GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
         glfwDestroyWindow(window);
@@ -290,10 +252,6 @@ int main() {
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-    // camera setup
-    Camera camera;
-    // Set the camera pointer in the GLFW window's user pointer so our callbacks can retrieve it.
-    glfwSetWindowUserPointer(window, &camera);
 
     // Load data
     Eigen::VectorXf inputMean, inputStd, outputMean, outputStd;
@@ -315,7 +273,7 @@ int main() {
     glEnableVertexAttribArray(0);
     checkGLError("VAO/VBO setup");
 
-    // Preload all frames into CPU memory for fast VBO updates
+    // Preload all frames into CPU memory
     std::vector<std::vector<float>> frameBuffers(data.size());
     for (size_t i = 0; i < data.size(); ++i) {
         frameBuffers[i].resize(98 * 3);
@@ -379,7 +337,7 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    // Camera and projection
+    // Projection matrix
     Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
     float aspect = 1280.0f / 720.0f;
     projection(0, 0) = 1.0f / (aspect * tanf(45.0f * 3.1415926535f / 360.0f));
@@ -389,22 +347,14 @@ int main() {
     projection(3, 2) = -1.0f;
     projection(3, 3) = 0.0f;
 
-    // Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
-    // view(2, 3) = -5.0f; // Move camera back
-
-    int currentFrame = 0;
-    bool showNormalized = false;
-
-    // ----- After preloading frameBuffers, add grid creation code -----
+    // Grid setup
     std::vector<float> gridVertices;
     int numSteps = 21;
     float gridSize = 10.0f;
     for (int i = 0; i < numSteps; i++) {
         float coord = -gridSize + i * (2 * gridSize) / (numSteps - 1);
-        // Vertical line (constant x) along z
         gridVertices.push_back(coord); gridVertices.push_back(0.0f); gridVertices.push_back(-gridSize);
         gridVertices.push_back(coord); gridVertices.push_back(0.0f); gridVertices.push_back(gridSize);
-        // Horizontal line (constant z) along x
         gridVertices.push_back(-gridSize); gridVertices.push_back(0.0f); gridVertices.push_back(coord);
         gridVertices.push_back(gridSize); gridVertices.push_back(0.0f); gridVertices.push_back(coord);
     }
@@ -418,6 +368,9 @@ int main() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
+
+    int currentFrame = 0;
+    bool showNormalized = false;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -458,11 +411,7 @@ int main() {
         glEnable(GL_DEPTH_TEST);
         glUseProgram(shaderProgram);
 
-        // Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
-        // Eigen::Matrix4f mvp = projection * view * model;
-        // GLint mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
-        // glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp.data());
-    // Use camera view matrix
+        // Use camera view matrix
         Eigen::Matrix4f view = camera.getViewMatrix();
         Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
         Eigen::Matrix4f mvp = projection * view * model;
