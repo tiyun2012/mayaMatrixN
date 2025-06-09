@@ -240,6 +240,16 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     }
 }
   
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    // Adjust the camera radius based on scroll input (zoom factor)
+    camera->radius -= static_cast<float>(yoffset) * 0.5f;
+    if (camera->radius < 1.0f)
+        camera->radius = 1.0f;
+    if (camera->radius > 50.0f)
+        camera->radius = 50.0f;
+}
+
 int main() {
     // Initialize GLFW
     if (!glfwInit()) {
@@ -263,6 +273,7 @@ int main() {
     // Set our updated mouse button and cursor callbacks
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetScrollCallback(window, scroll_callback);
   
     // Initialize GLAD to load OpenGL functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -328,8 +339,9 @@ int main() {
     const char* fragmentShaderSource = R"(
         #version 330 core
         out vec4 FragColor;
+        uniform vec4 inColor;
         void main() {
-            FragColor = vec4(1.0, 1.0, 0.0, 1.0); // Yellow
+            FragColor = inColor;
         }
     )";
 
@@ -383,6 +395,30 @@ int main() {
     int currentFrame = 0;
     bool showNormalized = false;
 
+    // ----- After preloading frameBuffers, add grid creation code -----
+    std::vector<float> gridVertices;
+    int numSteps = 21;
+    float gridSize = 10.0f;
+    for (int i = 0; i < numSteps; i++) {
+        float coord = -gridSize + i * (2 * gridSize) / (numSteps - 1);
+        // Vertical line (constant x) along z
+        gridVertices.push_back(coord); gridVertices.push_back(0.0f); gridVertices.push_back(-gridSize);
+        gridVertices.push_back(coord); gridVertices.push_back(0.0f); gridVertices.push_back(gridSize);
+        // Horizontal line (constant z) along x
+        gridVertices.push_back(-gridSize); gridVertices.push_back(0.0f); gridVertices.push_back(coord);
+        gridVertices.push_back(gridSize); gridVertices.push_back(0.0f); gridVertices.push_back(coord);
+    }
+
+    GLuint gridVAO, gridVBO;
+    glGenVertexArrays(1, &gridVAO);
+    glGenBuffers(1, &gridVBO);
+    glBindVertexArray(gridVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, gridVBO);
+    glBufferData(GL_ARRAY_BUFFER, gridVertices.size() * sizeof(float), gridVertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -433,6 +469,14 @@ int main() {
         GLint mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp.data());
 
+        // Draw grid plane in gray
+        GLint colorLoc = glGetUniformLocation(shaderProgram, "inColor");
+        glUniform4f(colorLoc, 0.5f, 0.5f, 0.5f, 1.0f);
+        glBindVertexArray(gridVAO);
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(gridVertices.size() / 3));
+
+        // Draw point cloud in yellow
+        glUniform4f(colorLoc, 1.0f, 1.0f, 0.0f, 1.0f);
         glBindVertexArray(vao);
         glDrawArrays(GL_POINTS, 0, 98);
         checkGLError("glDrawArrays");
@@ -446,6 +490,8 @@ int main() {
     // Cleanup
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
+    glDeleteVertexArrays(1, &gridVAO);
+    glDeleteBuffers(1, &gridVBO);
     glDeleteProgram(shaderProgram);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
