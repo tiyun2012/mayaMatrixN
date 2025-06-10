@@ -24,21 +24,23 @@ struct Camera {
     float phi = 0.0f;      // Polar angle (radians)
     float radius = 5.0f;   // Distance from origin
     Eigen::Vector3f target = Eigen::Vector3f::Zero(); // Look-at point
+    Eigen::Vector3f position;
     bool isRotating = false;
     bool isPanning = false;
     double lastX = 0.0;
     double lastY = 0.0;
+    // ey
 
     // Compute view matrix
-    Eigen::Matrix4f getViewMatrix() const {
+    Eigen::Matrix4f getViewMatrix()  {
         Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
         Eigen::Vector3f eye;
-        eye.x() = target.x() + radius * sinf(phi) * cosf(theta);
-        eye.y() = target.y() + radius * cosf(phi);
-        eye.z() = target.z() + radius * sinf(phi) * sinf(theta);
-
+        position.x() = target.x() + radius * sinf(phi) * cosf(theta);
+        position.y() = target.y() + radius * cosf(phi);
+        position.z() = target.z() + radius * sinf(phi) * sinf(theta);
+        
         // Look-at matrix
-        Eigen::Vector3f forward = (target - eye).normalized();
+        Eigen::Vector3f forward = (target - position).normalized();
         Eigen::Vector3f up(0.0f, 1.0f, 0.0f);
         Eigen::Vector3f right = forward.cross(up).normalized();
         up = right.cross(forward).normalized();
@@ -47,9 +49,9 @@ struct Camera {
         lookAt.block<1,3>(0,0) = right.transpose();
         lookAt.block<1,3>(1,0) = up.transpose();
         lookAt.block<1,3>(2,0) = -forward.transpose();
-        lookAt(0,3) = -right.dot(eye);
-        lookAt(1,3) = -up.dot(eye);
-        lookAt(2,3) = forward.dot(eye);
+        lookAt(0,3) = -right.dot(position);
+        lookAt(1,3) = -up.dot(position);
+        lookAt(2,3) = forward.dot(position);
         return lookAt;
     }
 };
@@ -252,6 +254,10 @@ int main() {
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
+    // Add these global flags at the beginning of main()
+    bool show_control_panel = true;
+    bool show_debug_info = false;
+    bool show_about = false;
 
     // Load data
     Eigen::VectorXf inputMean, inputStd, outputMean, outputStd;
@@ -379,19 +385,69 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGui::Begin("Control Panel");
-        ImGui::SliderInt("Frame", &currentFrame, 0, static_cast<int>(data.size()) - 1);
-        ImGui::Checkbox("Show Normalized", &showNormalized);
-        ImGui::Text("Frame %d: Translation (%.2f, %.2f, %.2f)", currentFrame,
-                    data[currentFrame].transform(3, 0), data[currentFrame].transform(3, 1), data[currentFrame].transform(3, 2));
-        if (ImGui::Button("Log Points")) {
-            const auto& points = showNormalized ? data[currentFrame].points_normalized : data[currentFrame].points;
-            std::cout << "Frame " << currentFrame << " Points:\n";
-            for (int j = 0; j < 98; ++j) {
-                std::cout << j << ": (" << points(j, 0) << ", " << points(j, 1) << ", " << points(j, 2) << ")\n";
+        // 1 /Main Window
+        // 1. Main Menu Bar
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Reload Data")) {
+                // We'll implement this later
+                std::cout << "Reload Data clicked" << std::endl;
             }
+            ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Control Panel", NULL, &show_control_panel);
+            ImGui::MenuItem("Debug Info", NULL, &show_debug_info);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("About")) {
+                show_about = true;
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+        //2Control Panel
+        if(show_control_panel) {
+            ImGui::Begin("Control Panel", &show_control_panel);
+            ImGui::SliderInt("Frame", &currentFrame, 0, static_cast<int>(data.size()) - 1);
+            ImGui::Checkbox("Show Normalized", &showNormalized);
+            ImGui::Text("Frame %d: Translation (%.2f, %.2f, %.2f)", currentFrame,
+                        data[currentFrame].transform(3, 0), data[currentFrame].transform(3, 1), data[currentFrame].transform(3, 2));
+            if (ImGui::Button("Log Points")) {
+                const auto& points = showNormalized ? data[currentFrame].points_normalized : data[currentFrame].points;
+                std::cout << "Frame " << currentFrame << " Points:\n";
+                for (int j = 0; j < 98; ++j) {
+                    std::cout << j << ": (" << points(j, 0) << ", " << points(j, 1) << ", " << points(j, 2) << ")\n";
+                }
+            }
+            ImGui::End();
+        }
+        // 3. Debug Info Window
+    if (show_debug_info) {
+        ImGui::Begin("Debug Info", &show_debug_info);
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+                    1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", 
+                    camera.position.x(), camera.position.y(), camera.position.z());
         ImGui::End();
+    }
+
+    // 4. About Window
+    if (show_about) 
+    {
+        ImGui::Begin("About Point Cloud Visualizer", &show_about);
+        ImGui::Text("Point Cloud Visualizer v0.1");
+        ImGui::Separator();
+        ImGui::Text("Developed by Your Name");
+        ImGui::Text("Using:");
+        ImGui::BulletText("GLFW %s", glfwGetVersionString());
+        ImGui::BulletText("OpenGL %s", glGetString(GL_VERSION));
+        ImGui::BulletText("Dear ImGui %s", IMGUI_VERSION);
+        if (ImGui::Button("Close")) show_about = false;
+        ImGui::End();
+    }
 
         // Update VBO
         std::vector<float> renderPoints(98 * 3);
