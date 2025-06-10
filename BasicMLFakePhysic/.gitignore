@@ -8,4 +8,4 @@ gladLib
 eigen-master
 data
 build/** # Ignore all files in the build directory
-.vs/**  # Ignore all files in the .vs directory
+.vs/**  # Ignore all files in th
